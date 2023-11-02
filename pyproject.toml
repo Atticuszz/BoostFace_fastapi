@@ -14,6 +14,10 @@ uvicorn = "^0.23.2"
 numpy = "^1.26.1"
 line-profiler-pycharm = "^1.1.0"
 pyturbojpeg = "^1.7.2"
+filterpy = "^1.4.5"
+pymilvus = "^2.3.2"
+sympy = "^1.12"
+milvus = "2.2.12"
 
 
 [build-system]
