@@ -6,10 +6,18 @@ import numpy as np
 from numpy.linalg import norm as l2norm
 
 # from easydict import EasyDict
-__all__ = ['Face', 'RawTarget', 'Target', 'ClosableQueue']
+__all__ = ['Face', 'RawTarget', 'Target', 'ClosableQueue', 'LightImage']
 
 from database.milvus_standalone.common import MatchInfo
 from .sort_plus import KalmanBoxTracker
+
+
+class LightImage(NamedTuple):
+    nd_arr: np.ndarray
+    # faces = [face, face, ...]
+    faces: list[list] = []
+    # face=[bbox, kps, det_score,colors,match_info]
+    screen_scale: tuple[int, int, int, int] = (0, 0, 0, 0)
 
 
 class Face(dict):

@@ -6,7 +6,7 @@ from line_profiler_pycharm import profile
 from numpy import ndarray
 
 from .common import ClosableQueue, camera_2_detect_queue, detect_2_rec_queue
-from ..data import LightImage
+from .common import LightImage
 
 __all__ = ['Detector', 'detect_task']
 

@@ -14,7 +14,7 @@ from numpy import ndarray, sqrt
 from turbojpeg import TurboJPEG
 
 from .common import ClosableQueue, rec_2_draw_queue
-from ..data import LightImage
+from .common import LightImage
 
 image2web_deque: deque[bytes, dict] = deque(maxlen=1)
 

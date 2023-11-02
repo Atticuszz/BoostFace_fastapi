@@ -11,7 +11,7 @@ from .common import Face, RawTarget, Target, ClosableQueue, detect_2_rec_queue, 
 from .detector import Detector, detect_task
 from .drawer import streaming_event
 from .sort_plus import associate_detections_to_trackers
-from ..data import LightImage
+from .common import LightImage
 
 matched_and_in_screen_deque = collections.deque(maxlen=1)
 
@@ -214,7 +214,7 @@ identifier_params = {
     "detector": detect_task.detector,
     "test_folder": "test_02"
 }
-identifier_task = IdentifierTask(
-    jobs=detect_2_rec_queue, results=rec_2_draw_queue,
-    identifier_params=identifier_params
-)
+# identifier_task = IdentifierTask(
+#     jobs=detect_2_rec_queue, results=rec_2_draw_queue,
+#     identifier_params=identifier_params
+# )
