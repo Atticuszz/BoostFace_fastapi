@@ -15,7 +15,7 @@ from line_profiler_pycharm import profile
 
 # from memory_profiler import profile
 from .common import ClosableQueue, camera_2_detect_queue
-from ..data import LightImage
+from .common import LightImage
 
 
 class Camera:

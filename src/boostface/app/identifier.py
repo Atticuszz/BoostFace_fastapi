@@ -1,5 +1,13 @@
+"""
+
+
+"""
+
 import collections
 import heapq
+import multiprocessing
+import queue
+from multiprocessing import Process
 from pathlib import Path
 
 import numpy as np
@@ -7,24 +15,39 @@ from line_profiler_pycharm import profile
 
 # from memory_profiler import profile
 from database.milvus_standalone.common import MatchInfo
-from .common import Face, RawTarget, Target, ClosableQueue, detect_2_rec_queue, rec_2_draw_queue
+from .common import Face, RawTarget, Target, ClosableQueue, IdentifyManager
+from .common import LightImage
 from .detector import Detector, detect_task
 from .drawer import streaming_event
+from .matcher import Matcher
 from .sort_plus import associate_detections_to_trackers
-from .common import LightImage
 
 matched_and_in_screen_deque = collections.deque(maxlen=1)
 
 
 class Extractor:
+    """
+    extract face embedding from given target bbox and kps, and det_score by running model in onnx
+    """
+
     def __init__(self):
         from my_insightface.insightface.model_zoo.model_zoo import get_model
-        root: Path = Path(__file__).parents[1].joinpath('model_zoo\\models\\insightface\\irn50_glint360k_r50.onnx')
-        self.rec_model = get_model(root, providers=('CUDAExecutionProvider', 'CPUExecutionProvider'))
+        root: Path = Path(__file__).parents[1].joinpath(
+            'model_zoo\\models\\insightface\\irn50_glint360k_r50.onnx')
+        self.rec_model = get_model(
+            root,
+            providers=(
+                'CUDAExecutionProvider',
+                'CPUExecutionProvider'))
         self.rec_model.prepare(ctx_id=0)
 
-    def __call__(self, img2extract: LightImage,
-                 bbox: np.ndarray[4, 2], kps: np.ndarray[5, 2], det_score: float) -> np.ndarray[512]:
+    def __call__(self,
+                 img2extract: LightImage,
+                 bbox: np.ndarray[4,
+                 2],
+                 kps: np.ndarray[5,
+                 2],
+                 det_score: float) -> np.ndarray[512]:
         """
         get embedding of face from given target bbox and kps, and det_score
         :param img2extract: target at which image
@@ -40,9 +63,74 @@ class Extractor:
         return face.normed_embedding
 
 
+def identify_works(
+        task_queue: multiprocessing.queues.Queue,
+        result_dict: dict,
+        stop_event: multiprocessing.Event):
+    """
+    long term works in single process
+    1. get target from worker_queue
+    2. extract embedding
+    3. search in milvus by embedding
+    4. put result in result_queue
+    :param worker_queue:
+    :param result_queue:
+    :return:
+    """
+    extractor = Extractor()
+    matcher = Matcher()
+    while not stop_event.is_set():
+        try:
+            task_id, task = task_queue.get(timeout=1)
+            emmbedding = extractor(task)
+            res = matcher(emmbedding)
+            result_dict[task_id] = res
+        except queue.Empty:
+            continue  # 这不是一个错误条件，只是队列暂时为空
+        except Exception as e:
+            print(f"An error occurred while processing the task: {e}")
+            # 可以选择是否将异常信息放入结果字典
+            # self.result_dict[task_id] = str(e)
+
+
+# TODO: test IdentifyWorker class
+class IdentifyWorker(Process):
+    """
+    solo worker for extractor and then search by milvus
+    """
+
+    def __init__(
+            self,
+            task_manager: IdentifyManager):
+        self._manager = task_manager
+        self._stop_event = multiprocessing.Event()
+        super().__init__(
+            target=identify_works,
+            daemon=True,
+            args=(
+                self._manager.task_queue,
+                self._manager.result_dict,
+                self._stop_event))
+
+    def run_work(self):
+        super().start()
+
+    def stop(self):
+        self._stop_event.set()
+
+
 class Identifier:
-    def __init__(self, detector: Detector, flush_threshold: int, max_age=120, min_hits=3, iou_threshold=0.3,
-                 server_refresh=False, npz_refresh=False, test_folder='test_01', ):
+    def __init__(
+            self,
+            detector: Detector,
+            flush_threshold: int,
+            max_age=120,
+            min_hits=3,
+            iou_threshold=0.3,
+            server_refresh=False,
+            npz_refresh=False,
+            test_folder='test_01',
+    ):
         from database.milvus_standalone.milvus_for_realtime import MilvusRealTime
         """
         :param detector:
@@ -59,10 +147,15 @@ class Identifier:
         self._recycled_ids = []
         self._extractor = Extractor()
         self._detector = detector
-        self._milvus = MilvusRealTime(test_folder=test_folder, refresh=server_refresh, flush_threshold=flush_threshold)
+        self._milvus = MilvusRealTime(
+            test_folder=test_folder,
+            refresh=server_refresh,
+            flush_threshold=flush_threshold)
         if server_refresh:
-            self._milvus.load_registered_faces(extractor=self._extractor,
-                                               detector=self._detector, refresh=npz_refresh)
+            self._milvus.load_registered_faces(
+                extractor=self._extractor,
+                detector=self._detector,
+                refresh=npz_refresh)
         else:
             self._milvus.load2RAM()
         self._frame_cnt = 1
@@ -82,7 +175,8 @@ class Identifier:
                 match_info = MatchInfo(face_id=-1, name=target.name, score=0.0)
                 target.match_info = match_info
             else:
-                matched_and_in_screen.append({"ID": target.id, "Name": target.name})
+                matched_and_in_screen.append(
+                    {"ID": target.id, "Name": target.name})
             image2identify.faces.append(
                 [target.bbox, target.kps, target.score, target.colors, target.match_info])
 
@@ -105,8 +199,12 @@ class Identifier:
     @profile
     def _update(self, image2update: LightImage):
         # 更新目标
-        detected_tars = [RawTarget(id=-1, bbox=face[0],
-                                   kps=face[1], score=face[2]) for face in image2update.faces]
+        detected_tars = [
+            RawTarget(
+                id=-1,
+                bbox=face[0],
+                kps=face[1],
+                score=face[2]) for face in image2update.faces]
         # 第一次的时候，直接添加
         if self._targets:
             # 提取预测的位置
@@ -125,12 +223,12 @@ class Identifier:
                 del self._targets[k]
 
             # 根据预测的位置和检测的  **targets**  进行匹配
-            matched, unmatched_det_tars, unmatched_pred_tars = associate_detections_to_trackers(detected_tars,
-                                                                                                predicted_tars,
-                                                                                                self.iou_threshold)
+            matched, unmatched_det_tars, unmatched_pred_tars = associate_detections_to_trackers(
+                detected_tars, predicted_tars, self.iou_threshold)
             # update pos and tracker for matched targets
             for pred_tar, detected_tar in matched:
-                self._targets[pred_tar.id].update_pos(detected_tar.bbox, detected_tar.kps, detected_tar.score)
+                self._targets[pred_tar.id].update_pos(
+                    detected_tar.bbox, detected_tar.kps, detected_tar.score)
                 self._targets[pred_tar.id].update_tracker(detected_tar)
         else:
             unmatched_det_tars = detected_tars
@@ -138,9 +236,11 @@ class Identifier:
         for detected_tar in unmatched_det_tars:
             new_id = self._generate_id()
             assert new_id not in self._targets, f'new_id is already in self._targets'
-            self._targets[new_id] = Target(id=new_id, bbox=detected_tar.bbox,
-                                           screen_scale=image2update.screen_scale,
-                                           kps=detected_tar.kps)
+            self._targets[new_id] = Target(
+                id=new_id,
+                bbox=detected_tar.bbox,
+                screen_scale=image2update.screen_scale,
+                kps=detected_tar.kps)
         self._clear_old_targets()
 
     def _clear_old_targets(self):
@@ -167,7 +267,8 @@ class Identifier:
     def _extract(self, image2extract: LightImage):
         for tar in self._targets.values():
             if tar.rec_satified:
-                tar.normed_embedding = self._extractor(image2extract, tar.bbox, tar.kps, tar.score)
+                tar.normed_embedding = self._extractor(
+                    image2extract, tar.bbox, tar.kps, tar.score)
         return image2extract
 
     def _generate_id(self):
@@ -178,7 +279,11 @@ class Identifier:
 
 
 class IdentifierTask(Identifier):
-    def __init__(self, jobs: ClosableQueue, results: ClosableQueue, identifier_params: dict):
+    def __init__(
+            self,
+            jobs: ClosableQueue,
+            results: ClosableQueue,
+            identifier_params: dict):
         """
 
         Args:

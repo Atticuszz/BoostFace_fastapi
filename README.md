@@ -37,7 +37,7 @@
 
 - db
   - vector db
-    - milvus -> self-host docker🐟
+    - milvus_client -> self-host docker🐟
   - sql db
     - supabase -> cloud service☁️
 

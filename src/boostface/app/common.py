@@ -1,6 +1,10 @@
+import multiprocessing
 import queue
+import uuid
 from queue import Queue
-from typing import NamedTuple
+from time import sleep
+from timeit import default_timer
+from typing import NamedTuple, Any
 
 import numpy as np
 from numpy.linalg import norm as l2norm
@@ -84,8 +88,15 @@ class RawTarget(NamedTuple):
 
 
 class Target:
-    def __init__(self, id: int, bbox: np.ndarray,
-                 screen_scale: tuple[int, int, int, int], kps: np.ndarray, score: float = 0.0):
+    def __init__(self,
+                 id: int,
+                 bbox: np.ndarray,
+                 screen_scale: tuple[int,
+                 int,
+                 int,
+                 int],
+                 kps: np.ndarray,
+                 score: float = 0.0):
 
         self._hit_streak = 0  # frames of keeping existing in screen
         self._time_since_update = 0  # frames of keeping missing in screen
@@ -124,7 +135,8 @@ class Target:
             raise ValueError('tracker is None')
         bbox = self._tracker.predict()[0]
         # if failed to update before predicted bbox, reset the hit_streak
-        # coming after the update_tracker is meaning that the target is  in screen continuously
+        # coming after the update_tracker is meaning that the target is  in
+        # screen continuously
         if self._time_since_update == 0:
             self._hit_streak += 1
         else:
@@ -225,6 +237,36 @@ class ClosableQueue(Queue):
         finally:
             print(
                 f"{self.task_name} queue wait for 5 sec got none,so close it")
+
+
+# TODO: test IdentifyManager class
+class IdentifyManager:
+    """
+    be shared for add ,get
+    """
+
+    def __init__(self):
+        self.manager = multiprocessing.Manager()
+        self.task_queue = multiprocessing.Queue()
+        self.result_dict: dict[str, Any] = self.manager.dict()
+
+    def add_task(self, task: Any, timeout: int = 5):
+        try:
+            task_id = uuid.uuid4()
+            self.task_queue.put((task_id, task), timeout=timeout)
+            return task_id
+        except queue.Full:
+            raise Exception("The task queue is full. Try again later.")
+
+    def get_result(self, task_id: str, timeout: int = 10):
+        # 尝试获取结果，如果结果尚未就绪，等待后重试
+        start_time = default_timer()
+        while True:
+            if task_id in self.result_dict:
+                return self.result_dict.pop(task_id)
+            elif default_timer() - start_time > timeout:
+                raise Exception(f"Timeout while waiting for the result of task {task_id}")
+            sleep(0.01)  # 避免过于频繁的查询
 
 
 camera_2_detect_queue = ClosableQueue("camera_2_detect", maxsize=200)
