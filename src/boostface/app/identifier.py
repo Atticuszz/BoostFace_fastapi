@@ -65,7 +65,7 @@ class Extractor:
 
 def identify_works(
         task_queue: multiprocessing.queues.Queue,
-        result_dict: dict,
+        task_manager: multiprocessing.Manager(),
         stop_event: multiprocessing.Event):
     """
     long term works in single process
@@ -79,12 +79,13 @@ def identify_works(
     """
     extractor = Extractor()
     matcher = Matcher()
+
     while not stop_event.is_set():
         try:
             task_id, task = task_queue.get(timeout=1)
             emmbedding = extractor(task)
             res = matcher(emmbedding)
-            result_dict[task_id] = res
+            task_manager[task_id] = res
         except queue.Empty:
             continue  # 这不是一个错误条件，只是队列暂时为空
         except Exception as e:
@@ -109,7 +110,7 @@ class IdentifyWorker(Process):
             daemon=True,
             args=(
                 self._manager.task_queue,
-                self._manager.result_dict,
+                self._manager.manager,
                 self._stop_event))
 
     def run_work(self):

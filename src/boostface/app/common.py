@@ -7,6 +7,7 @@ from timeit import default_timer
 from typing import NamedTuple, Any
 
 import numpy as np
+from line_profiler_pycharm import profile
 from numpy.linalg import norm as l2norm
 
 # from easydict import EasyDict
@@ -245,29 +246,40 @@ class IdentifyManager:
     be shared for add ,get
     """
 
-    def __init__(self):
-        self.manager = multiprocessing.Manager()
-        self.task_queue = multiprocessing.Queue()
-        self.result_dict: dict[str, Any] = self.manager.dict()
+    def __init__(self, task_queue: multiprocessing.Queue, result_dict: dict):
+        self.task_queue = task_queue
+        self.result_dict = result_dict
+        self._cost_time = {}
+        print("IdentifyManager init done")
 
+    @profile
     def add_task(self, task: Any, timeout: int = 5):
         try:
+            start_time = default_timer()
             task_id = uuid.uuid4()
             self.task_queue.put((task_id, task), timeout=timeout)
+            self._cost_time.setdefault('add_task', []).append(default_timer() - start_time)
             return task_id
         except queue.Full:
-            raise Exception("The task queue is full. Try again later.")
+            raise queue.Full("The task queue is full. Try again later.")
 
-    def get_result(self, task_id: str, timeout: int = 10):
+    def get_result(self, task_id: str, timeout: int = 10) -> tuple[str, Any]:
         # 尝试获取结果，如果结果尚未就绪，等待后重试
         start_time = default_timer()
         while True:
-            if task_id in self.result_dict:
-                return self.result_dict.pop(task_id)
+            get_start_time = default_timer()
+            res = self.result_dict.get(task_id, None)
+            if res is not None:
+                self._cost_time.setdefault('get_result', []).append(default_timer() - get_start_time)
+                return res
             elif default_timer() - start_time > timeout:
-                raise Exception(f"Timeout while waiting for the result of task {task_id}")
+                raise queue.Empty(f"Timeout while waiting for the result of task {task_id}")
             sleep(0.01)  # 避免过于频繁的查询
 
+    @property
+    def cost_time(self):
+        cost_time = {key: sum(costs) / len(costs) for key, costs in self._cost_time.items()}
+        return cost_time
 
 camera_2_detect_queue = ClosableQueue("camera_2_detect", maxsize=200)
 detect_2_rec_queue = ClosableQueue("detect_2_rec", maxsize=200)

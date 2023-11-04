@@ -22,9 +22,9 @@ onnxruntime = "^1.16.1"
 onnx = "^1.15.0"
 scikit-image = "^0.22.0"
 line-profiler = "^4.1.1"
-line-profiler-pycharm = "^1.1.0"
 setuptools = "^68.2.2"
 pyyaml = "^6.0.1"
+line-profiler-pycharm = "^1.1.0"
 
 
 [build-system]
