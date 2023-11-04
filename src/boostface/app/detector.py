@@ -33,7 +33,7 @@ class ObjectTracker:
 
 class Detector:
     def __init__(self):
-        from my_insightface.insightface.model_zoo.model_zoo import get_model
+        from ..model_zoo import get_model
         root = Path(__file__).parents[1].joinpath('model_zoo\\models\\insightface\\det_2.5g.onnx')
         self.detector_model = get_model(root, providers=('CUDAExecutionProvider', 'CPUExecutionProvider'))
         prepare_params = {'ctx_id': 0,

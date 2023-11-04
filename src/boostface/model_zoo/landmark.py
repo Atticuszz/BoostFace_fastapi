@@ -5,13 +5,12 @@
 # @Function      :
 
 from __future__ import division
-import numpy as np
+
 import cv2
 import onnx
 import onnxruntime
+
 from ..utils import face_align
-from ..utils import transform
-from ..data import get_object
 
 __all__ = [
     'Landmark',
@@ -66,7 +65,7 @@ class Landmark:
         if output_shape[1] == 3309:
             self.lmk_dim = 3
             self.lmk_num = 68
-            self.mean_lmk = get_object('meanshape_68.pkl')
+            # self.mean_lmk = get_object('meanshape_68.pkl')
             self.require_pose = True
         else:
             self.lmk_dim = 2
@@ -104,10 +103,10 @@ class Landmark:
         IM = cv2.invertAffineTransform(M)
         pred = face_align.trans_points(pred, IM)
         face[self.taskname] = pred
-        if self.require_pose:
-            P = transform.estimate_affine_matrix_3d23d(self.mean_lmk, pred)
-            s, R, t = transform.P2sRt(P)
-            rx, ry, rz = transform.matrix2angle(R)
-            pose = np.array([rx, ry, rz], dtype=np.float32)
-            face['pose'] = pose  # pitch, yaw, roll
+        # if self.require_pose:
+        # P = transform.estimate_affine_matrix_3d23d(self.mean_lmk, pred)
+        # s, R, t = transform.P2sRt(P)
+        # rx, ry, rz = transform.matrix2angle(R)
+        # pose = np.array([rx, ry, rz], dtype=np.float32)
+        # face['pose'] = pose  # pitch, yaw, roll
         return pred

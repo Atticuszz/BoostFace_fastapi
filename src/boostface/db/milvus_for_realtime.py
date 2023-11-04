@@ -6,13 +6,13 @@ from numpy import ndarray
 from numpy.lib.npyio import NpzFile
 from pymilvus.orm import utility
 
-from .milvus_lite import Milvus
+from src.boostface.app.common import LightImage
+from src.boostface.app.common import Target
+from src.boostface.app.detector import Detector
+from src.boostface.app.identifier import Extractor
+from src.boostface.utils.my_tools import get_digits, get_nodigits
 from .common import MatchInfo
-from my_insightface.insightface.app.identifier import Extractor
-from my_insightface.insightface.app.common import Target
-from my_insightface.insightface.app.detector import Detector
-from my_insightface.insightface.data.image import LightImage
-from my_insightface.insightface.utils.my_tools import get_digits, get_nodigits
+from .milvus_lite import Milvus
 
 __all__ = ['MilvusRealTime']
 

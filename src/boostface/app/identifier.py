@@ -9,18 +9,22 @@ import multiprocessing
 import queue
 from multiprocessing import Process
 from pathlib import Path
+from timeit import default_timer
 
 import numpy as np
 from line_profiler_pycharm import profile
 
-# from memory_profiler import profile
-from database.milvus_standalone.common import MatchInfo
-from .common import Face, RawTarget, Target, ClosableQueue, IdentifyManager
+from .common import Face, RawTarget, Target
 from .common import LightImage
-from .detector import Detector, detect_task
+from .detector import Detector
 from .drawer import streaming_event
-from .matcher import Matcher
 from .sort_plus import associate_detections_to_trackers
+from ..db.common import MatchInfo
+from ..db.operations import matcher
+# from ..db.milvus_for_realtime import MilvusRealTime
+from ..model_zoo import get_model
+
+# from memory_profiler import profile
 
 matched_and_in_screen_deque = collections.deque(maxlen=1)
 
@@ -31,7 +35,7 @@ class Extractor:
     """
 
     def __init__(self):
-        from my_insightface.insightface.model_zoo.model_zoo import get_model
+
         root: Path = Path(__file__).parents[1].joinpath(
             'model_zoo\\models\\insightface\\irn50_glint360k_r50.onnx')
         self.rec_model = get_model(
@@ -64,8 +68,8 @@ class Extractor:
 
 
 def identify_works(
-        task_queue: multiprocessing.queues.Queue,
-        task_manager: multiprocessing.Manager(),
+        task_queue: multiprocessing.Queue,
+        result_dict: dict,
         stop_event: multiprocessing.Event):
     """
     long term works in single process
@@ -73,26 +77,33 @@ def identify_works(
     2. extract embedding
     3. search in milvus by embedding
     4. put result in result_queue
-    :param worker_queue:
-    :param result_queue:
+    :param stop_event:
+    :param result_dict:
+    :param task_queue:
     :return:
     """
+    from src.boostface.db.operations import matcher
     extractor = Extractor()
-    matcher = Matcher()
-
-    while not stop_event.is_set():
-        try:
-            task_id, task = task_queue.get(timeout=1)
-            emmbedding = extractor(task)
-            res = matcher(emmbedding)
-            task_manager[task_id] = res
-        except queue.Empty:
-            continue  # 这不是一个错误条件，只是队列暂时为空
-        except Exception as e:
-            print(f"An error occurred while processing the task: {e}")
-            # 可以选择是否将异常信息放入结果字典
-            # self.result_dict[task_id] = str(e)
-
+    try:
+        while not stop_event.is_set():
+            try:
+                task_id, task = task_queue.get(timeout=1)
+                light_image, bbox, kps, score = task
+                start = default_timer()
+                emmbedding = extractor(light_image, bbox, kps, score)
+                print(f'extractor cost time: {default_timer() - start}')
+                start = default_timer()
+                res = matcher(emmbedding)
+                print(f'matcher cost time: {default_timer() - start}')
+                result_dict[task_id] = res if res else "unknown"
+            except queue.Empty:
+                continue  # 这不是一个错误条件，只是队列暂时为空
+            except Exception as e:
+                print(f"An error occurred while processing the{task_id} task: {e}")
+                # # 可以选择是否将异常信息放入结果字典
+                # result_dict[task_id] = str(e)
+    finally:
+        matcher.shut_down()
 
 # TODO: test IdentifyWorker class
 class IdentifyWorker(Process):
@@ -102,29 +113,32 @@ class IdentifyWorker(Process):
 
     def __init__(
             self,
-            task_manager: IdentifyManager):
-        self._manager = task_manager
+            task_queue: multiprocessing.Queue,
+            result_dict: dict,
+    ):
         self._stop_event = multiprocessing.Event()
         super().__init__(
             target=identify_works,
             daemon=True,
             args=(
-                self._manager.task_queue,
-                self._manager.manager,
+                task_queue,
+                result_dict,
                 self._stop_event))
 
-    def run_work(self):
+    def start(self):
         super().start()
+        print("IdentifyWorker start")
 
     def stop(self):
         self._stop_event.set()
+        super().join()
+        print("IdentifyWorker stop")
 
 
 class Identifier:
     def __init__(
             self,
             detector: Detector,
-            flush_threshold: int,
             max_age=120,
             min_hits=3,
             iou_threshold=0.3,
@@ -132,7 +146,7 @@ class Identifier:
             npz_refresh=False,
             test_folder='test_01',
     ):
-        from database.milvus_standalone.milvus_for_realtime import MilvusRealTime
+
         """
         :param detector:
         :param max_age: 超过这个帧数没被更新就删除
@@ -146,26 +160,14 @@ class Identifier:
         self.min_hits = min_hits  # 至少被检测到的次数才算
         self.iou_threshold = iou_threshold
         self._recycled_ids = []
-        self._extractor = Extractor()
         self._detector = detector
-        self._milvus = MilvusRealTime(
-            test_folder=test_folder,
-            refresh=server_refresh,
-            flush_threshold=flush_threshold)
-        if server_refresh:
-            self._milvus.load_registered_faces(
-                extractor=self._extractor,
-                detector=self._detector,
-                refresh=npz_refresh)
-        else:
-            self._milvus.load2RAM()
         self._frame_cnt = 1
+        self._matcher = matcher
 
     @profile
     def identified_results(self, image2identify: LightImage) -> LightImage:
         self._update(image2identify)
-        self._extract(image2identify)
-        self._search()
+        self._matcher(image2identify.nd_arr)
         image2identify.faces.clear()
         matched_and_in_screen = []
         for i, target in enumerate(self._targets.values()):
@@ -190,7 +192,7 @@ class Identifier:
         return image2identify
 
     def stop_milvus(self):
-        self._milvus.stop_milvus()
+        self._matcher.shut_down()
 
     def _send2web(self, new_targets: list[dict]):
 
@@ -259,67 +261,53 @@ class Identifier:
             else:
                 heapq.heappush(self._recycled_ids, k)
 
-    def _search(self):
-        if not self._milvus:
-            raise ValueError('milvus is not initialized')
-        self._milvus.face_match([tar for tar in self._targets.values()
-                                 if tar.normed_embedding.all()], 0.0)
-
-    def _extract(self, image2extract: LightImage):
-        for tar in self._targets.values():
-            if tar.rec_satified:
-                tar.normed_embedding = self._extractor(
-                    image2extract, tar.bbox, tar.kps, tar.score)
-        return image2extract
-
     def _generate_id(self):
         try:
             return heapq.heappop(self._recycled_ids)
         except IndexError:
             return len(self._targets)
 
-
-class IdentifierTask(Identifier):
-    def __init__(
-            self,
-            jobs: ClosableQueue,
-            results: ClosableQueue,
-            identifier_params: dict):
-        """
-
-        Args:
-            jobs:
-            results:
-            identifier_params: { detector:Detector,
-                                 flush_threshold: int,
-                                 max_age: int = 120,
-                                 min_hits: int = 3,
-                                 iou_threshold: float = 0.3,
-                                 server_refresh: bool = False,
-                                 npz_refresh: bool = False,
-                                 test_folder: str = 'test_01'}
-        """
-        super().__init__(**identifier_params)
-        self.jobs = jobs
-        self.results = results
-
-    @profile
-    def run(self):
-        for img in self.jobs:
-            identified = self.identified_results(img)
-            self.results.put(identified)
-        # self.stop_milvus()
-
-        return "IdentifierTask Done"
-
-
-identifier_params = {
-    "flush_threshold": 1000,
-    "server_refresh": True,
-    "npz_refresh": True,
-    "detector": detect_task.detector,
-    "test_folder": "test_02"
-}
+# class IdentifierTask(Identifier):
+#     def __init__(
+#             self,
+#             jobs: ClosableQueue,
+#             results: ClosableQueue,
+#             identifier_params: dict):
+#         """
+#
+#         Args:
+#             jobs:
+#             results:
+#             identifier_params: { detector:Detector,
+#                                  flush_threshold: int,
+#                                  max_age: int = 120,
+#                                  min_hits: int = 3,
+#                                  iou_threshold: float = 0.3,
+#                                  server_refresh: bool = False,
+#                                  npz_refresh: bool = False,
+#                                  test_folder: str = 'test_01'}
+#         """
+#         super().__init__(**identifier_params)
+#         self.jobs = jobs
+#         self.results = results
+#
+#     @profile
+#     def run(self):
+#         for img in self.jobs:
+#             identified = self.identified_results(img)
+#             self.results.put(identified)
+#         # self.stop_milvus()
+#
+#         return "IdentifierTask Done"
+#
+#
+# identifier_params = {
+#     "flush_threshold": 1000,
+#     "server_refresh": True,
+#     "npz_refresh": True,
+#     "detector": detect_task.detector,
+#     "test_folder": "test_02"
+# }
 # identifier_task = IdentifierTask(
 #     jobs=detect_2_rec_queue, results=rec_2_draw_queue,
 #     identifier_params=identifier_params

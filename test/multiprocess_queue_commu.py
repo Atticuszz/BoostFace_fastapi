@@ -1,14 +1,14 @@
-from queue import Empty
-from timeit import default_timer as timer
 import os
+from multiprocessing import Process, Queue, Event
+from queue import Empty
+from time import sleep
+from timeit import default_timer as timer
 
+import numpy as np
 from line_profiler import profile
 
 from src.boostface.app.common import LightImage
 from src.boostface.app.identifier import Extractor
-import numpy as np
-from multiprocessing import Process, Queue, Event
-from time import sleep, time
 
 
 # 假设的模拟数据生成函数
@@ -71,7 +71,8 @@ def main():
     queue = Queue(maxsize=1000)  # 队列最大容量
     performance_log = Queue()  # 性能日志队列
 
-    producer = Process(target=data_generator, args=(queue,))
+    producer = Process(tar
+    get = data_generator, args = (queue,))
     producer.start()
     print("Producer started.")
     # 创建并启动工作进程

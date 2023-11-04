@@ -13,7 +13,7 @@ from numpy.linalg import norm as l2norm
 # from easydict import EasyDict
 __all__ = ['Face', 'RawTarget', 'Target', 'ClosableQueue', 'LightImage']
 
-from database.milvus_standalone.common import MatchInfo
+from src.boostface.db.common import MatchInfo
 from .sort_plus import KalmanBoxTracker
 
 
@@ -21,8 +21,11 @@ class LightImage(NamedTuple):
     nd_arr: np.ndarray
     # faces = [face, face, ...]
     faces: list[list] = []
-    # face=[bbox, kps, det_score,colors,match_info]
+    # face=[bbox:[4,2], kps:[5,2], det_score,colors,match_info]
     screen_scale: tuple[int, int, int, int] = (0, 0, 0, 0)
+
+    def __str__(self):
+        return f"LightImage(nd_arr={self.nd_arr}, faces={self.faces})"
 
 
 class Face(dict):
@@ -253,16 +256,26 @@ class IdentifyManager:
         print("IdentifyManager init done")
 
     @profile
-    def add_task(self, task: Any, timeout: int = 5):
+    def add_task(self,
+                 task: tuple[LightImage,
+                 np.ndarray[4,
+                 2],
+                 np.ndarray[5,
+                 2],
+                 float],
+                 timeout: int = 5):
         try:
             start_time = default_timer()
             task_id = uuid.uuid4()
             self.task_queue.put((task_id, task), timeout=timeout)
-            self._cost_time.setdefault('add_task', []).append(default_timer() - start_time)
+            self._cost_time.setdefault(
+                'add_task', []).append(
+                default_timer() - start_time)
             return task_id
         except queue.Full:
             raise queue.Full("The task queue is full. Try again later.")
 
+    @profile
     def get_result(self, task_id: str, timeout: int = 10) -> tuple[str, Any]:
         # 尝试获取结果，如果结果尚未就绪，等待后重试
         start_time = default_timer()
@@ -270,16 +283,22 @@ class IdentifyManager:
             get_start_time = default_timer()
             res = self.result_dict.get(task_id, None)
             if res is not None:
-                self._cost_time.setdefault('get_result', []).append(default_timer() - get_start_time)
+                self._cost_time.setdefault(
+                    'get_result', []).append(
+                    default_timer() - get_start_time)
                 return res
             elif default_timer() - start_time > timeout:
-                raise queue.Empty(f"Timeout while waiting for the result of task {task_id}")
-            sleep(0.01)  # 避免过于频繁的查询
+                raise queue.Empty(
+                    f"Timeout while waiting for the result of task {task_id}")
+            sleep(0.001)  # 避免过于频繁的查询
 
     @property
     def cost_time(self):
-        cost_time = {key: sum(costs) / len(costs) for key, costs in self._cost_time.items()}
+        cost_time = {
+            key: sum(costs) / len(costs) for key,
+            costs in self._cost_time.items() if len(costs) > 0}
         return cost_time
+
 
 camera_2_detect_queue = ClosableQueue("camera_2_detect", maxsize=200)
 detect_2_rec_queue = ClosableQueue("detect_2_rec", maxsize=200)
