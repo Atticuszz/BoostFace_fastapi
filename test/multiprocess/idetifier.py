@@ -1,10 +1,13 @@
 import concurrent
 import multiprocessing
 from concurrent.futures import ThreadPoolExecutor
+from time import sleep
 from timeit import default_timer
 
 import numpy as np
 from line_profiler_pycharm import profile
+from matplotlib import pyplot as plt
+from scipy.stats import linregress
 
 from src.boostface.app.common import IdentifyManager
 from src.boostface.app.identifier import IdentifyWorker
@@ -20,8 +23,41 @@ def process_image(images, identifier_manager):
             (image, image.faces[0][0], image.faces[0][1], image.faces[0][2]))
         result = identifier_manager.get_result(uuid)
         elapsed.append(default_timer() - start)
-        print("task:", uuid, "result:", result)
+        # print("task:", uuid, "result:", result)
     return elapsed
+
+
+def plot_mean_times_with_trend(mean_times):
+    # Define the x values (number of threads)
+    x_values = range(1, len(mean_times) + 1)
+
+    # Compute the linear regression to get the slope and intercept
+    slope, intercept, r_value, p_value, std_err = linregress(x_values, mean_times)
+
+    # Create a trendline using the slope and intercept
+    trendline = [slope * i + intercept for i in x_values]
+
+    # Plotting the original mean elapsed times with data points
+    plt.figure(figsize=(10, 6))
+    plt.plot(x_values, mean_times, marker='o', label='Mean Elapsed Time', linestyle='-', color='blue')
+
+    # Plotting the trend line
+    plt.plot(x_values, trendline, label=f'Trendline (slope: {slope:.4f})', linestyle='--', color='red')
+
+    # Annotating the slope on the plot
+    plt.text(0.6 * max(x_values), intercept + slope * 0.6 * max(x_values), f'Slope: {slope:.4f}', fontsize=12,
+             color='red')
+
+    # Highlighting the data points and showing (x, y) values
+    for i, txt in enumerate(mean_times):
+        plt.annotate(f'({i + 1}, {txt:.4f})', (i + 1, txt), textcoords="offset points", xytext=(0, 10), ha='center')
+
+    plt.xlabel('Number of Threads')
+    plt.ylabel('Mean Elapsed Time (s)')
+    plt.title('Mean Elapsed Time vs. Number of Threads with Trendline')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
 
 
 if __name__ == '__main__':
@@ -35,24 +71,29 @@ if __name__ == '__main__':
         print("created identifier_manager")
 
         worker = IdentifyWorker(identifier_task_queue, identifier_result_dict)
+        mean_elapsed_times = []
         try:
             worker.start()
             print("created sub process")
 
             # 创建虚拟数据
-            fake_img = [generate_light_image(size=(640, 640)) for _ in range(20)]
-            # 使用线程池处理图像
-            elapsed_time = []
-            # 模拟5个线程同时喂给处理进程
-            with ThreadPoolExecutor(max_workers=8) as executor:
-                futures = [executor.submit(process_image, fake_img, identifier_manager) for _ in range(1)]
-                for future in concurrent.futures.as_completed(futures):
-                    elapsed = future.result()
-                    elapsed_time.append(np.mean(elapsed))
+            fake_img = [generate_light_image(size=(640, 640)) for _ in range(50)]
+            sleep(2)
+            for num_threads in range(1, 10):  # from 1 to 20 threads
+                print(f"Testing {num_threads} threads")
+                # 使用线程池处理图像
+                elapsed_time = []
+                # 模拟5个线程同时喂给处理进程
+                with ThreadPoolExecutor(max_workers=num_threads) as executor:
+                    futures = [executor.submit(process_image, fake_img, identifier_manager) for _ in range(num_threads)]
+                    for future in concurrent.futures.as_completed(futures):
+                        elapsed = future.result()
+                        elapsed_time.append(np.mean(elapsed))
+                mean_elapsed_times.append(np.mean(elapsed_time))
 
         except KeyboardInterrupt:
             print("KeyboardInterrupt")
         finally:
-            # 打印耗时
-            print("mean:", np.mean(elapsed_time))
             worker.stop()
+            #             打印图表
+            plot_mean_times_with_trend(mean_elapsed_times)

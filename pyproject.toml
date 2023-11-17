@@ -23,7 +23,6 @@ onnx = "^1.15.0"
 scikit-image = "^0.22.0"
 line-profiler = "^4.1.1"
 setuptools = "^68.2.2"
-pyyaml = "^6.0.1"
 line-profiler-pycharm = "^1.1.0"
 
 

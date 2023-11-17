@@ -7,18 +7,16 @@ from pymilvus.orm import utility
 from src.boostface.db.milvus_client import MilvusClient
 from test import generate_normalized_embeddings
 
-__all__ = ["register", "matcher"]
-client = MilvusClient()
+__all__ = ["Register", "Matcher"]
 
 
-# TODO: build Matcher
 class Matcher:
     """
     继承milvus_client ,作为匹配器
     """
 
-    def __init__(self, client: MilvusClient, threshold=0.5):
-        self._client = client
+    def __init__(self, threshold=0.5, **kwargs):
+        self._client = MilvusClient(**kwargs)
         self._threshold = threshold
         print("Loading collection to RAM")
         self._client.collection.load(timeout=10)
@@ -64,9 +62,10 @@ class Register:
 
 
 # register = Register(client)
-matcher = Matcher(client)
+# matcher = Matcher(client)
 if __name__ == '__main__':
-    num_faces = 10000
+    client = MilvusClient()
+    num_faces = 1000
     embeddings = generate_normalized_embeddings(num_faces)
     ids = [str(i) for i in range(num_faces)]  # 生成 ID 列表
     names = [f"Person_{i}" for i in range(num_faces)]  # 生成名称列表

@@ -19,8 +19,8 @@ from .common import LightImage
 from .detector import Detector
 from .drawer import streaming_event
 from .sort_plus import associate_detections_to_trackers
-from ..db.common import MatchInfo
-from ..db.operations import matcher
+from ..db.base_model import MatchInfo
+from ..db.operations import Matcher
 # from ..db.milvus_for_realtime import MilvusRealTime
 from ..model_zoo import get_model
 
@@ -82,7 +82,7 @@ def identify_works(
     :param task_queue:
     :return:
     """
-    from src.boostface.db.operations import matcher
+    matcher = Matcher()
     extractor = Extractor()
     try:
         while not stop_event.is_set():
@@ -91,10 +91,10 @@ def identify_works(
                 light_image, bbox, kps, score = task
                 start = default_timer()
                 emmbedding = extractor(light_image, bbox, kps, score)
-                print(f'extractor cost time: {default_timer() - start}')
+                # print(f'extractor cost time: {default_timer() - start}')
                 start = default_timer()
                 res = matcher(emmbedding)
-                print(f'matcher cost time: {default_timer() - start}')
+                # print(f'matcher cost time: {default_timer() - start}')
                 result_dict[task_id] = res if res else "unknown"
             except queue.Empty:
                 continue  # 这不是一个错误条件，只是队列暂时为空
@@ -162,7 +162,7 @@ class Identifier:
         self._recycled_ids = []
         self._detector = detector
         self._frame_cnt = 1
-        self._matcher = matcher
+        self._matcher = Matcher()
 
     @profile
     def identified_results(self, image2identify: LightImage) -> LightImage:

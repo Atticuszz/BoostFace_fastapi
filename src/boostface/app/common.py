@@ -13,7 +13,7 @@ from numpy.linalg import norm as l2norm
 # from easydict import EasyDict
 __all__ = ['Face', 'RawTarget', 'Target', 'ClosableQueue', 'LightImage']
 
-from src.boostface.db.common import MatchInfo
+from src.boostface.db.base_model import MatchInfo
 from .sort_plus import KalmanBoxTracker
 
 

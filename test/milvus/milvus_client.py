@@ -1,6 +1,6 @@
 from time import sleep
 
-from src.boostface.db.milvus_client import MilvusClient
+from src.boostface.db import MilvusClient
 
 
 def main():
