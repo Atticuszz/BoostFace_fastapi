@@ -1,12 +1,5 @@
 # coding=utf-8
 from enum import StrEnum
-from typing import NamedTuple
-
-
-class MatchInfo(NamedTuple):
-    score: float
-    face_id: int
-    name: str
 
 
 # for search_param

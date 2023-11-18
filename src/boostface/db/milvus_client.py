@@ -64,7 +64,6 @@ class MilvusClient:
             print(f"Collection {self._config.collection.name} deleted.")
 
         print(f"\nCollection {self._config.collection.name} is creating...")
-        temp = self._config.collection.as_dict()
         collection = Collection(**self._config.collection.as_dict())
         print("collection created:", self._config.collection.name)
         return collection

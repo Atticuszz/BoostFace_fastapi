@@ -15,9 +15,9 @@ def insert_data_check(data: list[ndarray, ndarray, ndarray]) -> list:
     # 条目数必须相同
     if not (ids.shape[0]) == names.shape[0] == normed_embeddings.shape[0]:
         raise ValueError("data is not same length")
-    # id必须是int64
-    if ids.dtype != np.int64:
-        ids = ids.astype(np.int64)
+    # id必须是varchar
+    if ids.dtype != str:
+        ids = ids.astype(str)
     # id 必须唯一
     if np.unique(ids).shape[0] != ids.shape[0]:
         raise ShapeError("ids must be unique")

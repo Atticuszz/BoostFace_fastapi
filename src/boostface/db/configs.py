@@ -63,15 +63,23 @@ class CollectionConfig(NamedTuple):
     shards_num: int
     properties: dict[str, str | int] = {"collection.ttl.seconds": 0}
 
+    def as_dict(self) -> dict:
+        """
+        filter out None value and convert NamedTuple to dict
+        :return:
+        """
+        filtered: dict = {k: v for k, v in self._asdict().items() if v is not None}
+        return recursive_as_dict(filtered)
+
 
 class PreparedSearchParam(NamedTuple):
-    metric_type: SimilarityMetric | DistanceMetric = SimilarityMetric.EUCLIDEAN
+    metric_type: SimilarityMetric | DistanceMetric = SimilarityMetric.INNER_PRODUCT
     params: dict[str, int] = {"nlist:": 1024, "nprobe": 10}
 
 
 class IndexParam(NamedTuple):
     index_type: FloatingPointIndexType | BinaryIndexType = FloatingPointIndexType.IVF_FLAT
-    metric_type: SimilarityMetric | DistanceMetric = SimilarityMetric.EUCLIDEAN
+    metric_type: SimilarityMetric | DistanceMetric = SimilarityMetric.INNER_PRODUCT
     params: dict[str, int] = {"nlist:": 1024, "nprobe": 10}
 
 
@@ -115,7 +123,8 @@ class ClientConfig(NamedTuple):
 
 id_field = Field(
     name="id",
-    dtype=DataType.INT64,
+    dtype=DataType.VARCHAR,
+    max_length=40,
     description="primary key",
     is_primary=True)
 name_field = Field(
@@ -144,17 +153,17 @@ basic_config = ClientConfig(
     ),
     index=IndexParam(
         index_type=FloatingPointIndexType.IVF_FLAT,
-        metric_type=SimilarityMetric.EUCLIDEAN,
+        metric_type=SimilarityMetric.INNER_PRODUCT,
         params={"nlist": 1024, "nprobe": 10}  # 定义了搜索时候的 聚类数量
     ),
     search=searchParam(
         param=PreparedSearchParam(
-            metric_type=SimilarityMetric.EUCLIDEAN,
+            metric_type=SimilarityMetric.INNER_PRODUCT,
             params={"nlist": 1024, "nprobe": 10}
         ),
         anns_field="embedding",
         limit=1,
-        output_fields=["id", "name", "embedding"]
+        output_fields=["id", "embedding"]
     )
 )
 if __name__ == "__main__":

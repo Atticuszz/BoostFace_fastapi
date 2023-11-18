@@ -1,7 +1,6 @@
 import concurrent
 import multiprocessing
 from concurrent.futures import ThreadPoolExecutor
-from time import sleep
 from timeit import default_timer
 
 import numpy as np
@@ -9,19 +8,19 @@ from line_profiler_pycharm import profile
 from matplotlib import pyplot as plt
 from scipy.stats import linregress
 
-from src.boostface.app.common import IdentifyManager
-from src.boostface.app.identifier import IdentifyWorker
-from test import generate_light_image
+from src.boostface.component.common import IdentifyManager, Face2Search
+from src.boostface.component.identifier import IdentifyWorker
+from test import generate_face2search
 
 
 @profile
-def process_image(images, identifier_manager):
+def process_image(images: list[Face2Search], identifier_manager: IdentifyManager):
     elapsed = []
     for image in images:
         start = default_timer()
-        uuid = identifier_manager.add_task(
-            (image, image.faces[0][0], image.faces[0][1], image.faces[0][2]))
+        uuid = identifier_manager.add_task(image)
         result = identifier_manager.get_result(uuid)
+        print("task:", uuid, "result:", result, "cost:", default_timer() - start)
         elapsed.append(default_timer() - start)
         # print("task:", uuid, "result:", result)
     return elapsed
@@ -60,7 +59,7 @@ def plot_mean_times_with_trend(mean_times):
     plt.show()
 
 
-if __name__ == '__main__':
+def test_IdentifyWorker():
     with multiprocessing.Manager() as manager:
         print("main process start")
 
@@ -77,9 +76,8 @@ if __name__ == '__main__':
             print("created sub process")
 
             # 创建虚拟数据
-            fake_img = [generate_light_image(size=(640, 640)) for _ in range(50)]
-            sleep(2)
-            for num_threads in range(1, 10):  # from 1 to 20 threads
+            fake_img = [generate_face2search(size=(640, 640)) for _ in range(50)]
+            for num_threads in range(1, 6):  # from 1 to 20 threads
                 print(f"Testing {num_threads} threads")
                 # 使用线程池处理图像
                 elapsed_time = []
@@ -97,3 +95,8 @@ if __name__ == '__main__':
             worker.stop()
             #             打印图表
             plot_mean_times_with_trend(mean_elapsed_times)
+
+
+if __name__ == '__main__':
+    # pass
+    test_IdentifyWorker()

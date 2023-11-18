@@ -2,6 +2,7 @@
 <project version="4">
   <component name="VcsDirectoryMappings">
     <mapping directory="" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/../Look_at_me" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/../work_space_fastapi" vcs="Git" />
   </component>
 </project>

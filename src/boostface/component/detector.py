@@ -1,34 +1,12 @@
 from pathlib import Path
 
-import cv2
 from line_profiler_pycharm import profile
-# from memory_profiler import profile
-from numpy import ndarray
 
-from .common import ClosableQueue, camera_2_detect_queue, detect_2_rec_queue
-from .common import LightImage
+from .common import ClosableQueue, Image2Detect, FaceNew
 
-__all__ = ['Detector', 'detect_task']
+__all__ = ['Detector', 'DetectorTask']
 
-
-# 性能和精确度太差
-class ObjectTracker:
-    def __init__(self, img2track: LightImage, bbox: ndarray[4]):
-        """
-        KCF,CSRT,,MOSSE
-        :param img2track:LightImage
-        :param bbox:ndarray[4]
-        """
-        self.tracker_name = 'CSRT'
-        self._tracker = cv2.legacy.TrackerCSRT_create()
-        self._tracker.init(img2track.nd_arr, tuple(bbox))
-
-    def update(self, img2track: LightImage):
-        success, bbox = self._tracker.update(img2track.nd_arr)
-        if success:
-            return bbox
-        else:
-            return None
+from ..utils.decorator import thread_error_catcher
 
 
 class Detector:
@@ -42,14 +20,16 @@ class Detector:
         self.detector_model.prepare(**prepare_params)
 
     @profile
-    def __call__(self, img2detect: LightImage) -> LightImage:
+    def __call__(self, img2detect: Image2Detect) -> Image2Detect:
+        # 对于一张图片，可能有多张人脸
         detect_params = {'max_num': 0, 'metric': 'default'}
         bboxes, kpss = self.detector_model.detect(img2detect.nd_arr, **detect_params)
         for i in range(bboxes.shape[0]):
             kps = kpss[i] if kpss is not None else None
             bbox = bboxes[i, 0:4]
             det_score = bboxes[i, 4]
-            face = [bbox, kps, det_score, None, None]
+            face: FaceNew = FaceNew(bbox, kps, det_score,
+                                    (0, 0, img2detect.nd_arr.shape[1], img2detect.nd_arr.shape[0]))
             img2detect.faces.append(face)
         return img2detect
 
@@ -61,14 +41,13 @@ class DetectorTask:
         self._results = results
 
     @profile
+    @thread_error_catcher
     def run(self):
+        print("detector start")
         for img in self._jobs:
-            # img: light image
-            results = self.detector(img)
+            # print("detector start{}".format(img.nd_arr.shape))
+            results: Image2Detect = self.detector(img)
             self._results.put(results)
         return "DetectorTask Done"
 
 
-detect_task = DetectorTask(
-    jobs=camera_2_detect_queue, results=detect_2_rec_queue
-)

@@ -4,7 +4,7 @@ import uuid
 from queue import Queue
 from time import sleep
 from timeit import default_timer
-from typing import NamedTuple, Any
+from typing import NamedTuple
 
 import numpy as np
 from line_profiler_pycharm import profile
@@ -13,8 +13,8 @@ from numpy.linalg import norm as l2norm
 # from easydict import EasyDict
 __all__ = ['Face', 'RawTarget', 'Target', 'ClosableQueue', 'LightImage']
 
-from src.boostface.db.base_model import MatchInfo
 from .sort_plus import KalmanBoxTracker
+from ..types import Image, Bbox, Kps, Color, Embedding, MatchInfo
 
 
 class LightImage(NamedTuple):
@@ -84,6 +84,110 @@ class Face(dict):
         return 'M' if self.gender == 1 else 'F'
 
 
+class Face2Search(NamedTuple):
+    """
+    face to search, it is a  image filled with face
+    """
+    face_img: Image
+    bbox: Bbox
+    kps: Kps
+    det_score: float
+
+
+class FaceNew:
+    def __init__(
+            self,
+            bbox: Bbox,
+            kps: Kps,
+            det_score: float,
+            scense_scale: tuple[int, int, int, int],
+            color: Color = (
+                    50,
+                    205,
+                    255),
+            match_info: MatchInfo = MatchInfo(0.0, '')):
+        """
+        init a face
+        :param bbox:shape [4,2]
+        :param kps: shape [5,2]
+        :param det_score:
+        :param color:
+        :param scense_scale: (x1,y1,x2,y2) of scense image
+        :param match_info: MatchInfo(uid,score)
+        """
+        self.bbox: Bbox = bbox
+        self.kps: Kps = kps
+        self.det_score: float = det_score
+        self.scense_scale: tuple[int, int, int, int] = scense_scale
+        # 默认是橙色
+        self.bbox_color: Color = color
+        self.embedding: Embedding = np.zeros(512)
+        self.id: int = 0  # target id
+        self.match_info: MatchInfo = match_info
+
+    @property
+    def embedding_norm(self) -> float:
+        if self.embedding is None:
+            raise ZeroDivisionError('embedding is None')
+        return l2norm(self.embedding)
+
+    @property
+    def normed_embedding(self) -> np.ndarray[512]:
+        if self.embedding is None:
+            raise ZeroDivisionError('embedding is None')
+        return self.embedding / self.embedding_norm
+
+    def update_match_info(self, match_info: MatchInfo):
+        self.match_info = match_info
+
+    def face_image(self, scense: Image) -> Face2Search:
+        """
+        get face image from scense
+        :param scense:
+        :return:
+        """
+        # 确保 bbox 中的值是整数
+        x1, y1, x2, y2 = map(int, [self.bbox[0], self.bbox[1], self.bbox[2], self.bbox[3]])
+
+        # 避免超出图像边界
+        x1 = max(0, x1)
+        y1 = max(0, y1)
+        x2 = min(scense.shape[1], x2)  # scense.shape[1] 是图像的宽度
+        y2 = min(scense.shape[0], y2)  # scense.shape[0] 是图像的高度
+
+        # 裁剪人脸图像
+        face_img = scense[y1:y2, x1:x2]
+        bbox = np.array([0, 0, face_img.shape[1], face_img.shape[0]])
+
+        # 调整关键点位置
+        kps = self.kps - np.array([x1, y1])
+
+        return Face2Search(face_img, bbox, kps, self.det_score)
+
+
+class Image2Detect:
+    """
+    image to detect
+    :param image: image
+    :param faces: [face, face, ...]
+    """
+
+    def __init__(self, image: Image, faces: list[FaceNew]):
+        self.nd_arr: Image = image
+        self.faces: list[FaceNew] = faces
+
+    @property
+    def scale(self) -> tuple[int, int, int, int]:
+        """
+        :return: (x1, y1, x2, y2)
+        :return:
+        """
+        return 0, 0, self.nd_arr.shape[1], self.nd_arr.shape[0]
+
+    def __str__(self):
+        return f"LightImage(nd_arr={self.nd_arr}, faces={self.faces})"
+
+
 class RawTarget(NamedTuple):
     id: int
     bbox: np.ndarray[4]
@@ -93,31 +197,20 @@ class RawTarget(NamedTuple):
 
 class Target:
     def __init__(self,
-                 id: int,
-                 bbox: np.ndarray,
-                 screen_scale: tuple[int,
-                 int,
-                 int,
-                 int],
-                 kps: np.ndarray,
+                 face: FaceNew,
                  score: float = 0.0):
 
         self._hit_streak = 0  # frames of keeping existing in screen
         self._time_since_update = 0  # frames of keeping missing in screen
-        self.id = id
-        self.bbox = bbox  # [x1, y1, x2, y2]
-        self.kps = kps
-        self.score = score
-        self.match_info: MatchInfo = MatchInfo(face_id=-1, name='', score=0.0)
+        self.face: FaceNew = face
         self.frames_since_reced: int = 0
-        self._screen_scale = screen_scale  # [x1, y1, x2, y2]
-        self._tracker: KalmanBoxTracker = KalmanBoxTracker(bbox)
+        self._tracker: KalmanBoxTracker = KalmanBoxTracker(face.bbox)
         self.normed_embedding: np.ndarray[512] = np.zeros(512)
 
     def update_pos(self, bbox: np.ndarray, kps: np.ndarray, score: float):
-        self.bbox = bbox
-        self.kps = kps
-        self.score = score
+        self.face.bbox = bbox
+        self.face.kps = kps
+        self.face.det_score = score
 
     def update_tracker(self, detect_tar: RawTarget):
         self._time_since_update = 0
@@ -129,11 +222,8 @@ class Target:
     def in_screen(self, min_hits: int) -> bool:
         return self._time_since_update < 1 and self._hit_streak >= min_hits
 
-    def set_match_info(self, match_info: MatchInfo):
-        self.match_info = match_info
-
     @property
-    def get_raw_target(self) -> RawTarget:
+    def get_predicted_tar(self) -> FaceNew:
         # get predicted bounding box from Kalman Filter
         if self._tracker is None:
             raise ValueError('tracker is None')
@@ -146,30 +236,32 @@ class Target:
         else:
             self._hit_streak = 0
         self._time_since_update += 1
-        return RawTarget(id=self.id, bbox=bbox, kps=self.kps, score=self.score)
+        perdicted_face: FaceNew = FaceNew(
+            bbox=bbox,
+            kps=self.face.kps,
+            det_score=self.face.det_score,
+            scense_scale=self.face.scense_scale)
+        return perdicted_face
 
     @property
     def screen_height(self):
-        return self._screen_scale[3] - self._screen_scale[1]
+        return self.face.scense_scale[3] - self.face.scense_scale[1]
 
     @property
     def screen_width(self):
-        return self._screen_scale[2] - self._screen_scale[0]
+        return self.face.scense_scale[2] - self.face.scense_scale[0]
 
     @property
     def bbox_width(self):
-        return self.bbox[2] - self.bbox[0]
+        return self.face.bbox[2] - self.face.bbox[0]
 
     @property
     def bbox_height(self):
-        return self.bbox[3] - self.bbox[1]
+        return self.face.bbox[3] - self.face.bbox[1]
 
     @property
     def name(self):
-        if self.if_matched and self.match_info.name:
-            return self.match_info.name
-        else:
-            return f'target[{self.id}]'
+        return f'target[{self.face.id}]'
 
     @property
     def time_satified(self) -> bool:
@@ -191,7 +283,7 @@ class Target:
 
     @property
     def if_matched(self) -> bool:
-        return self.match_info.face_id != -1
+        return self.face.match_info.uid is not None
 
     @property
     def rec_satified(self) -> bool:
@@ -209,7 +301,7 @@ class Target:
         green = (152, 251, 152)
         if self.if_matched:
             # 有匹配对象
-            if self.match_info.score > 0.4:
+            if self.face.match_info.score > 0.4:
                 bbox_color = green
                 name_color = green
             else:
@@ -228,13 +320,10 @@ class ClosableQueue(Queue):
         self.task_name = task_name
 
     def __iter__(self):
-        from .camera import camera_read_done
         try:
             while True:
                 # print("task_name:", self.task_name,self.qsize())
-                if camera_read_done.is_set():
-                    raise queue.Empty
-                item = self.get(timeout=5)
+                item = self.get(timeout=10000)
                 yield item
         except queue.Empty:
             raise StopIteration
@@ -257,16 +346,11 @@ class IdentifyManager:
 
     @profile
     def add_task(self,
-                 task: tuple[LightImage,
-                 np.ndarray[4,
-                 2],
-                 np.ndarray[5,
-                 2],
-                 float],
+                 task: Face2Search,
                  timeout: int = 5):
         try:
             start_time = default_timer()
-            task_id = uuid.uuid4()
+            task_id: uuid = uuid.uuid4()
             self.task_queue.put((task_id, task), timeout=timeout)
             self._cost_time.setdefault(
                 'add_task', []).append(
@@ -276,7 +360,13 @@ class IdentifyManager:
             raise queue.Full("The task queue is full. Try again later.")
 
     @profile
-    def get_result(self, task_id: str, timeout: int = 10) -> tuple[str, Any]:
+    def get_result(self, task_id: str, timeout: int = 100) -> MatchInfo:
+        """
+        get result from working process
+        :param task_id:
+        :param timeout:
+        :return:  result of task_id ,it represent the uuid of matched face
+        """
         # 尝试获取结果，如果结果尚未就绪，等待后重试
         start_time = default_timer()
         while True:
