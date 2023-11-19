@@ -12,7 +12,7 @@ def draw_bbox(dimg, bbox, bbox_color):
     # 定义矩形的四个角的坐标
     pt1 = tuple(map(int, (bbox[0], bbox[1])))
     pt2 = tuple(map(int, (bbox[2], bbox[3])))
-    bbox_thickness = 4
+    bbox_thickness = 2
     # 定义直角附近线段的长度
     line_len = int(0.08 * (pt2[0] - pt1[0]) + 0.06 * (pt2[1] - pt1[1]))
     inner_line_len = int(
@@ -37,7 +37,7 @@ def draw_bbox(dimg, bbox, bbox_color):
 
 def draw_text(dimg, box, name):
     # 文字信息显示
-    font_scale = 3
+    font_scale = 1
     # 设置文本的位置，将文本放在人脸框的下方
     text_position = tuple(map(int, (box[0], box[3] + 22)))
     # ft2 = cv2.freetype.createFreeType2()
@@ -57,5 +57,5 @@ def draw_text(dimg, box, name):
                 fontFace=cv2.FONT_HERSHEY_SIMPLEX,
                 fontScale=font_scale,
                 color=(0, 255, 0),
-                thickness=3,
+                thickness=2,
                 lineType=cv2.LINE_AA)

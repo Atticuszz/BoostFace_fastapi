@@ -10,22 +10,8 @@ import numpy as np
 from line_profiler_pycharm import profile
 from numpy.linalg import norm as l2norm
 
-# from easydict import EasyDict
-__all__ = ['Face', 'RawTarget', 'Target', 'ClosableQueue', 'LightImage']
-
 from .sort_plus import KalmanBoxTracker
 from ..types import Image, Bbox, Kps, Color, Embedding, MatchInfo
-
-
-class LightImage(NamedTuple):
-    nd_arr: np.ndarray
-    # faces = [face, face, ...]
-    faces: list[list] = []
-    # face=[bbox:[4,2], kps:[5,2], det_score,colors,match_info]
-    screen_scale: tuple[int, int, int, int] = (0, 0, 0, 0)
-
-    def __str__(self):
-        return f"LightImage(nd_arr={self.nd_arr}, faces={self.faces})"
 
 
 class Face(dict):
@@ -86,7 +72,7 @@ class Face(dict):
 
 class Face2Search(NamedTuple):
     """
-    face to search, it is a  image filled with face
+    face to search, it is a image filled with face for process transfer
     """
     face_img: Image
     bbox: Bbox
@@ -100,29 +86,28 @@ class FaceNew:
             bbox: Bbox,
             kps: Kps,
             det_score: float,
-            scense_scale: tuple[int, int, int, int],
-            color: Color = (
-                    50,
-                    205,
-                    255),
-            match_info: MatchInfo = MatchInfo(0.0, '')):
+            scene_scale: tuple[int, int, int, int],
+            face_id: int = 0,
+            color: Color = (50, 205, 255),
+            match_info: MatchInfo = MatchInfo(0.0, ''),
+    ):
         """
         init a face
         :param bbox:shape [4,2]
         :param kps: shape [5,2]
         :param det_score:
         :param color:
-        :param scense_scale: (x1,y1,x2,y2) of scense image
+        :param scene_scale: (x1,y1,x2,y2) of scense image
         :param match_info: MatchInfo(uid,score)
         """
         self.bbox: Bbox = bbox
         self.kps: Kps = kps
         self.det_score: float = det_score
-        self.scense_scale: tuple[int, int, int, int] = scense_scale
+        self.scense_scale: tuple[int, int, int, int] = scene_scale
         # 默认是橙色
         self.bbox_color: Color = color
         self.embedding: Embedding = np.zeros(512)
-        self.id: int = 0  # target id
+        self.id: int = face_id  # target id
         self.match_info: MatchInfo = match_info
 
     @property
@@ -147,7 +132,8 @@ class FaceNew:
         :return:
         """
         # 确保 bbox 中的值是整数
-        x1, y1, x2, y2 = map(int, [self.bbox[0], self.bbox[1], self.bbox[2], self.bbox[3]])
+        x1, y1, x2, y2 = map(
+            int, [self.bbox[0], self.bbox[1], self.bbox[2], self.bbox[3]])
 
         # 避免超出图像边界
         x1 = max(0, x1)
@@ -180,126 +166,49 @@ class Image2Detect:
     def scale(self) -> tuple[int, int, int, int]:
         """
         :return: (x1, y1, x2, y2)
-        :return:
         """
         return 0, 0, self.nd_arr.shape[1], self.nd_arr.shape[0]
 
-    def __str__(self):
-        return f"LightImage(nd_arr={self.nd_arr}, faces={self.faces})"
-
-
-class RawTarget(NamedTuple):
-    id: int
-    bbox: np.ndarray[4]
-    kps: np.ndarray[5, 2]
-    score: float = 0.0
-
 
 class Target:
-    def __init__(self,
-                 face: FaceNew,
-                 score: float = 0.0):
+    """
+    :param face: FaceNew
+    :ivar _hit_streak: frames of keeping existing in screen
+    :ivar _frames_since_update: frames of keeping missing in screen
+    :ivar face: FaceNew
+    :ivar _frames_since_identified: frames since reced
+    :ivar _tracker: KalmanBoxTracker
+    :ivar normed_embedding: Embedding
+    """
+
+    def __init__(self, face: FaceNew):
 
         self._hit_streak = 0  # frames of keeping existing in screen
-        self._time_since_update = 0  # frames of keeping missing in screen
+        self._frames_since_update = 0  # frames of keeping missing in screen
+        self._frames_since_identified = 0
         self.face: FaceNew = face
-        self.frames_since_reced: int = 0
         self._tracker: KalmanBoxTracker = KalmanBoxTracker(face.bbox)
-        self.normed_embedding: np.ndarray[512] = np.zeros(512)
-
-    def update_pos(self, bbox: np.ndarray, kps: np.ndarray, score: float):
-        self.face.bbox = bbox
-        self.face.kps = kps
-        self.face.det_score = score
-
-    def update_tracker(self, detect_tar: RawTarget):
-        self._time_since_update = 0
-        self._tracker.update(detect_tar.bbox)
-
-    def old_enough(self, max_age: int) -> bool:
-        return self._time_since_update > max_age
-
-    def in_screen(self, min_hits: int) -> bool:
-        return self._time_since_update < 1 and self._hit_streak >= min_hits
-
-    @property
-    def get_predicted_tar(self) -> FaceNew:
-        # get predicted bounding box from Kalman Filter
-        if self._tracker is None:
-            raise ValueError('tracker is None')
-        bbox = self._tracker.predict()[0]
-        # if failed to update before predicted bbox, reset the hit_streak
-        # coming after the update_tracker is meaning that the target is  in
-        # screen continuously
-        if self._time_since_update == 0:
-            self._hit_streak += 1
-        else:
-            self._hit_streak = 0
-        self._time_since_update += 1
-        perdicted_face: FaceNew = FaceNew(
-            bbox=bbox,
-            kps=self.face.kps,
-            det_score=self.face.det_score,
-            scense_scale=self.face.scense_scale)
-        return perdicted_face
-
-    @property
-    def screen_height(self):
-        return self.face.scense_scale[3] - self.face.scense_scale[1]
-
-    @property
-    def screen_width(self):
-        return self.face.scense_scale[2] - self.face.scense_scale[0]
-
-    @property
-    def bbox_width(self):
-        return self.face.bbox[2] - self.face.bbox[0]
-
-    @property
-    def bbox_height(self):
-        return self.face.bbox[3] - self.face.bbox[1]
-
-    @property
-    def name(self):
-        return f'target[{self.face.id}]'
-
-    @property
-    def time_satified(self) -> bool:
-        if not self.if_matched:
-            return False
-        elif self.frames_since_reced < 100:
-            self.frames_since_reced += 1
-            return False
-        else:
-            print(self.frames_since_reced)
-            self.frames_since_reced = 0
-            return True
-
-    @property
-    def scale_satified(self) -> bool:
-        target_area = self.bbox_width * self.bbox_height
-        screen_area = self.screen_height * self.screen_width
-        return (target_area / screen_area) > 0.03
-
-    @property
-    def if_matched(self) -> bool:
-        return self.face.match_info.uid is not None
+        self.normed_embedding: Embedding = np.zeros(512)
 
     @property
     def rec_satified(self) -> bool:
-        if self.scale_satified and not self.if_matched and self.in_screen(3):
+        if self._scale_satisfied and not self._if_matched and self.in_screen:
             return True
-        elif self.if_matched and self.scale_satified and self.time_satified and self.in_screen(3):
+        elif self._if_matched and self._scale_satisfied and self._time_satisfied and self.in_screen:
             return True
         else:
             return False
 
     @property
     def colors(self):
+        """
+        state color
+        :return:
+        """
         red = (0, 0, 255)
         yellow = (50, 205, 255)
         green = (152, 251, 152)
-        if self.if_matched:
+        if self._if_matched:
             # 有匹配对象
             if self.face.match_info.score > 0.4:
                 bbox_color = green
@@ -313,26 +222,124 @@ class Target:
             name_color = yellow
         return bbox_color, name_color
 
+    def update_pos(self, bbox: Bbox, kps: Kps, score: float):
+        self.face.bbox = bbox
+        self.face.kps = kps
+        self.face.det_score = score
+
+    def update_tracker(self, bbox: Bbox):
+        """
+        update tracker with bbox, and update state of continuation
+        """
+        self._frames_since_update = 0
+        self._hit_streak += 1
+        self._tracker.update(bbox)
+
+    def unmatched(self):
+        """
+        update state of continuation
+        :return:
+        """
+        self._frames_since_update += 1
+        self._hit_streak = 0
+
+    def old_enough(self, max_age: int) -> bool:
+        """
+        if the target is too old ,should be del
+        """
+        return self._frames_since_update > max_age
+
+    @property
+    def in_screen(self) -> bool:
+        """
+        if the target is in screen should be satisfied min_hits,forbid the shiver
+        """
+        min_hits = 3  # almost 0.1s if fps=30
+        return self._hit_streak >= min_hits
+
+    @property
+    def get_predicted_tar(self) -> FaceNew:
+        """
+        get predicted FaceNew by tracker
+        :return:
+        """
+        # get predicted bounding box from Kalman Filter
+        bbox = self._tracker.predict()[0]
+        predicted_face: FaceNew = FaceNew(
+            bbox,
+            self.face.kps,
+            self.face.det_score,
+            face_id=self.face.id,
+            scene_scale=self.face.scense_scale)
+        return predicted_face
+
+    @property
+    def name(self) -> str:
+        return f'target[{self.face.id}]'
+
+    @property
+    def _time_satisfied(self) -> bool:
+        """
+        Checks if the time(frames) elapsed since the target was last identified exceeds a predefined threshold.
+        """
+        frames_threshold = 100  # almost 3 sec if fps=30
+        if not self._if_matched:
+            return False
+        elif self._frames_since_identified < frames_threshold:
+            self._frames_since_identified += 1
+            return False
+        else:
+            self._frames_since_identified = 0
+            return True
+
+    @property
+    def _scale_satisfied(self) -> bool:
+        """
+        if the scale of target is satisfied
+        """
+        scale_threshold = 0.03
+        target_area = (self.face.bbox[2] - self.face.bbox[0]) * \
+                      (self.face.bbox[3] - self.face.bbox[1])
+        screen_area = (self.face.scense_scale[3] - self.face.scense_scale[1]) * (
+                self.face.scense_scale[2] - self.face.scense_scale[0])
+        return (target_area / screen_area) > scale_threshold
+
+    @property
+    def _if_matched(self) -> bool:
+        return self.face.match_info.uid is not None
+
 
 class ClosableQueue(Queue):
-    def __init__(self, task_name: str, maxsize: int = 100):
+    """
+    A Queue that can be closed.
+    :param task_name: name of the task
+    :param maxsize: maxsize of the queue
+    :param wait_time: wait time for get,if over this time,close the queue for iteration
+    """
+
+    def __init__(self, task_name: str, maxsize: int = 100, wait_time: int = 5):
         super().__init__(maxsize=maxsize)
-        self.task_name = task_name
+        self._task_name = task_name
+        self._closed = False
+        self._wait_time = wait_time
 
     def __iter__(self):
-        try:
-            while True:
-                # print("task_name:", self.task_name,self.qsize())
-                item = self.get(timeout=10000)
+        """
+        rewrite the iter method to auto cancel the iter when queue is empty for self._wait_time
+        :return:
+        """
+        while not self._closed:
+            try:
+                # 设置更合理的超时时间，例如5秒
+                item = self.get(timeout=5)
                 yield item
-        except queue.Empty:
-            raise StopIteration
-        finally:
-            print(
-                f"{self.task_name} queue wait for 5 sec got none,so close it")
+            except queue.Empty:
+                print(
+                    f"{self._task_name} queue wait for 5 sec got none, so close it")
+                self.closed = True
+                break
 
 
-# TODO: test IdentifyManager class
 class IdentifyManager:
     """
     be shared for add ,get
@@ -388,8 +395,3 @@ class IdentifyManager:
             key: sum(costs) / len(costs) for key,
             costs in self._cost_time.items() if len(costs) > 0}
         return cost_time
-
-
-camera_2_detect_queue = ClosableQueue("camera_2_detect", maxsize=200)
-detect_2_rec_queue = ClosableQueue("detect_2_rec", maxsize=200)
-rec_2_draw_queue = ClosableQueue("rec_2_draw", maxsize=400)

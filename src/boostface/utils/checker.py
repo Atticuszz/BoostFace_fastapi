@@ -4,6 +4,9 @@ from sympy import ShapeError
 
 
 def insert_data_check(data: list[ndarray, ndarray, ndarray]) -> list:
+    """
+    check data before insert into milvus
+    """
     ids, names, normed_embeddings = data
     # 不可以有缺失值
     if (

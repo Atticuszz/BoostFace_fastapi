@@ -1,3 +1,4 @@
+
 from pathlib import Path
 
 from line_profiler_pycharm import profile
@@ -10,6 +11,10 @@ from ..utils.decorator import thread_error_catcher
 
 
 class Detector:
+    """
+    scrfd det_2.5g.onnx with onnxruntime
+    """
+
     def __init__(self):
         from ..model_zoo import get_model
         root = Path(__file__).parents[1].joinpath('model_zoo\\models\\insightface\\det_2.5g.onnx')
@@ -20,8 +25,12 @@ class Detector:
         self.detector_model.prepare(**prepare_params)
 
     @profile
-    def __call__(self, img2detect: Image2Detect) -> Image2Detect:
-        # 对于一张图片，可能有多张人脸
+    def run_onnx(self, img2detect: Image2Detect) -> Image2Detect:
+        """
+        run onnx model
+        :param img2detect:
+        :return: img2detect with faces
+        """
         detect_params = {'max_num': 0, 'metric': 'default'}
         bboxes, kpss = self.detector_model.detect(img2detect.nd_arr, **detect_params)
         for i in range(bboxes.shape[0]):
@@ -35,6 +44,10 @@ class Detector:
 
 
 class DetectorTask:
+    """
+    run detector on images in jobs and put results in results queue in a thread
+    """
+
     def __init__(self, jobs: ClosableQueue, results: ClosableQueue):
         self.detector = Detector()
         self._jobs = jobs
@@ -42,12 +55,14 @@ class DetectorTask:
 
     @profile
     @thread_error_catcher
-    def run(self):
+    def run_detection(self) -> str:
+        """
+        run_detector
+        :return:
+        """
         print("detector start")
         for img in self._jobs:
             # print("detector start{}".format(img.nd_arr.shape))
-            results: Image2Detect = self.detector(img)
+            results: Image2Detect = self.detector.run_onnx(img)
             self._results.put(results)
         return "DetectorTask Done"
-
-

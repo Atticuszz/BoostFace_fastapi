@@ -66,3 +66,7 @@
 
 - web-fastapi- all in one
   - attendance
+
+# TODO: boostface connect to vue socketio
+
+# TODO: fastapi with socketio

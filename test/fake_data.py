@@ -97,7 +97,7 @@ def generate_image2detect(pixels=None, size=None, num_faces=3) -> Image2Detect:
             bbox=face2search.bbox,
             kps=face2search.kps,
             det_score=face2search.det_score,
-            scense_scale=(0, 0, width, height),
+            scene_scale=(0, 0, width, height),
             color=(50, 205, 255),
             match_info=MatchInfo(0.0, '')
         )

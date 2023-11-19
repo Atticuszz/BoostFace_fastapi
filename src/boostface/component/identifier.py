@@ -10,11 +10,10 @@ import numpy as np
 from line_profiler_pycharm import profile
 
 from .common import Face, Target, IdentifyManager, Image2Detect, FaceNew, Face2Search, ClosableQueue
-from .drawer import streaming_event
 from .sort_plus import associate_detections_to_trackers
 from ..db.operations import Matcher
 from ..model_zoo import get_model, ArcFaceONNX
-from ..types import Image
+from ..types import Image, Bbox, Kps, Embedding, MatchInfo
 from ..utils.decorator import thread_error_catcher
 
 matched_and_in_screen_deque = collections.deque(maxlen=1)
@@ -28,17 +27,15 @@ class Extractor:
     def __init__(self):
         root: Path = Path(__file__).parents[1].joinpath(
             'model_zoo\\models\\insightface\\irn50_glint360k_r50.onnx')
-        self.rec_model: ArcFaceONNX = get_model(root,
-                                                providers=(
-                                                    'CUDAExecutionProvider',
-                                                    'CPUExecutionProvider'))
+        self.rec_model: ArcFaceONNX = get_model(root, providers=(
+            'CUDAExecutionProvider', 'CPUExecutionProvider'))
         self.rec_model.prepare(ctx_id=0)
 
-    def __call__(self,
+    def run_onnx(self,
                  img2extract: Image,
-                 bbox: np.ndarray[4, 2],
-                 kps: np.ndarray[5, 2],
-                 det_score: float) -> np.ndarray[512]:
+                 bbox: Bbox,
+                 kps: Kps,
+                 det_score: float) -> Embedding:
         """
         get embedding of face from given target bbox and kps, and det_score
         :param img2extract: target at which image
@@ -54,14 +51,13 @@ class Extractor:
         return face.normed_embedding
 
 
-
 def identify_works(
         task_queue: multiprocessing.Queue,
         result_dict: dict,
         stop_event: multiprocessing.Event):
     """
-    long term works in single process
-    1. get target from worker_queue
+    long term works in a single process
+    1. get Face from worker_queue
     2. extract embedding
     3. search in milvus by embedding
     4. put result in result_queue
@@ -70,32 +66,24 @@ def identify_works(
     :param task_queue:
     :return:
     """
-    matcher = Matcher()
-    extractor = Extractor()
-    try:
+    with Matcher() as mathcer:
+        extractor = Extractor()
         while not stop_event.is_set():
             try:
                 item = task_queue.get(timeout=1)
                 task_id: uuid = item[0]
                 task: Face2Search = item[1]
                 # start = default_timer()
-                emmbedding = extractor(
+                emmbedding = extractor.run_onnx(
                     task.face_img, task.bbox, task.kps, task.det_score)
                 # print(f'extractor cost time: {default_timer() - start}')
                 # start = default_timer()
-                result_dict[task_id] = matcher(emmbedding)
+                result_dict[task_id] = mathcer.search(emmbedding)
             except queue.Empty:
-                continue  # 这不是一个错误条件，只是队列暂时为空
+                continue
             except Exception as e:
                 print(
                     f"An error occurred while processing the{task_id} task: {e}")
-                # # 可以选择是否将异常信息放入结果字典
-                # result_dict[task_id] = str(e)
-    finally:
-        matcher.shut_down()
-
-
-# TODO: test IdentifyWorker class
 
 
 class IdentifyWorker(Process):
@@ -127,7 +115,15 @@ class IdentifyWorker(Process):
         print("IdentifyWorker stop")
 
 
-class Identifier:
+class Tracker:
+    """
+    tracker for a single target
+    :param max_age: del as frames not matched
+    :param min_hits: be treated normal
+    :param iou_threshold: for Hungarian algorithm
+    :param manager: IdentifyManager
+    """
+
     def __init__(
             self,
             manager: IdentifyManager,
@@ -135,43 +131,68 @@ class Identifier:
             min_hits=1,
             iou_threshold=0.3,
     ):
-        """
-        :param max_age: 超过这个帧数没被更新就删除
-        :param min_hits: 超过这个帧数 才会被 识别
-        :param iou_threshold: 卡尔曼滤波器的阈值
-        :param manager: 识别器的manager
-        """
         self._targets: dict[int, Target] = {}
-        self.max_age = max_age  # 超过该帧数没被更新就删除
-        self.min_hits = min_hits  # 至少被检测到的次数才算
+        self.max_age = max_age
+        self.min_hits = min_hits
         self.iou_threshold = iou_threshold
         self._recycled_ids = []
-        self._frame_cnt = 1
-
         self._identifier_manager: IdentifyManager = manager
 
     @profile
     @thread_error_catcher
     def identified_results(self, image2identify: Image2Detect) -> Image2Detect:
         """
+        fill image2identify.faces with match info or return MatchInfo directly
         :param image2identify:
         :return: get image2identify match info
         """
         self._update(image2identify)
         self._search(image2identify)
-        if self._frame_cnt < 100000:
-            self._frame_cnt += 1
-        else:
-            self._frame_cnt = 0
         # [tar.face.match_info for tar in self._targets.values()]
+        return Image2Detect(
+            image2identify.nd_arr, [
+                tar.face for tar in self._targets.values() if tar.in_screen])
 
-        return Image2Detect(image2identify.nd_arr,
-                            [tar.face for tar in self._targets.values() if tar.in_screen(self.min_hits)])
+    @thread_error_catcher
+    def _update(self, image2update: Image2Detect):
+        """
+        according to the "memory" in Kalman tracker update former targets info by Hungarian algorithm
+        :param image2update:
+        :return:
+        """
+        detected_tars: list[FaceNew] = image2update.faces
 
-    def _send2web(self, new_targets: list[dict]):
+        if self._targets:
+            predicted_tars: list[FaceNew] = self._clean_dying()
+            # match predicted and detected
+            matched, unmatched_det_tars, unmatched_pred_tars = associate_detections_to_trackers(
+                detected_tars, predicted_tars, self.iou_threshold)
 
-        if streaming_event.is_set():
-            matched_and_in_screen_deque.append(new_targets)
+            # update pred_tar with matched detected tar
+            for pred_tar, detected_tar in matched:
+                self._targets[pred_tar.id].update_pos(
+                    detected_tar.bbox, detected_tar.kps, detected_tar.det_score)
+
+                self._targets[pred_tar.id].update_tracker(detected_tar.bbox)
+
+            # update  state of continuation of  unmatched_pred_tars
+            for unmatched_tar in unmatched_pred_tars:
+                self._targets[unmatched_tar.id].unmatched()
+
+        else:
+            unmatched_det_tars: list[FaceNew] = detected_tars
+
+        # add new targets
+        for detected_tar in unmatched_det_tars:
+            new_id = self._generate_id()
+            assert new_id not in self._targets, f'{new_id} is already in self._targets'
+            detected_tar.id = new_id
+            self._targets[new_id] = Target(face=detected_tar)
+
+            # dev only
+            self._targets[new_id].face.match_info = MatchInfo(uid=self._targets[new_id].name, score=0.0)
+
+        self._clear_dead()
 
     @thread_error_catcher
     def _search(self, image2identify: Image2Detect):
@@ -181,58 +202,41 @@ class Identifier:
         """
         for tar in self._targets.values():
             if tar.rec_satified:
-                uuid = self._identifier_manager.add_task(tar.face.face_image(image2identify.nd_arr))
-                tar.face.update_match_info(self._identifier_manager.get_result(uuid))
+                uuid = self._identifier_manager.add_task(
+                    tar.face.face_image(image2identify.nd_arr))
+                tar.face.update_match_info(
+                    self._identifier_manager.get_result(uuid))
 
-    @profile
     @thread_error_catcher
-    def _update(self, image2update: Image2Detect):
+    def _clean_dying(self) -> list[FaceNew]:
         """
-        according to the "memory" in Kalman tracker update former targets info by Hungarian algorithm
-        :param image2update:
-        :return:
+        clean dying targets from tracker prediction
+        :return tracker predictions
         """
-        # 更新目标
+        predicted_tars: list[FaceNew] = []
+        to_del: list[int] = []
+        for tar in self._targets.values():
+            raw_tar: FaceNew = tar.get_predicted_tar
+            # store key in self.self._targets.values()
+            pos = raw_tar.bbox
+            if np.any(np.isnan(pos)):
+                to_del.append(raw_tar.id)
+            # got new predict tars
+            predicted_tars.append(raw_tar)
 
-        detected_tars: list[FaceNew] = image2update.faces
-        # 第一次的时候，直接添加
-        if self._targets:
-            # 提取预测的位置
-            predicted_tars: list[FaceNew] = []
-            to_del: list[int] = []
-            for i, tar in enumerate(self._targets.values()):
-                raw_tar: FaceNew = tar.get_predicted_tar
-                predicted_tars.append(raw_tar)
-                pos = raw_tar.bbox
-                if np.any(np.isnan(pos)):
-                    to_del.append(raw_tar.id)
-            #  根据预测的位置清空即将消失的目标
-            for k in to_del:
-                assert k in self._targets, f'k = {k} not in self._targets'
-                heapq.heappush(self._recycled_ids, k)
-                del self._targets[k]
+        #  del dying tars
+        for k in to_del:
+            assert k in self._targets, f'k = {k} not in self._targets'
+            assert isinstance(k, int), "k in to_del,should be int"
+            heapq.heappush(self._recycled_ids, k)
+            del self._targets[k]
+        return predicted_tars
 
-            # 根据预测的位置和检测的  **targets**  进行匹配
-            matched, unmatched_det_tars, unmatched_pred_tars = associate_detections_to_trackers(
-                detected_tars, predicted_tars, self.iou_threshold)
-            # update pos and tracker for matched targets
-            for pred_tar, detected_tar in matched:
-                self._targets[pred_tar.id].update_pos(
-                    detected_tar.bbox, detected_tar.kps, detected_tar.det_score)
-                self._targets[pred_tar.id].update_tracker(detected_tar)
-        else:
-            unmatched_det_tars: list[FaceNew] = detected_tars
-        # add new targets
-        for detected_tar in unmatched_det_tars:
-            new_id = self._generate_id()
-            assert new_id not in self._targets, f'{new_id} is already in self._targets'
-            detected_tar.id = new_id
-            self._targets[new_id] = Target(face=detected_tar)
-            # print(f'new target id = {new_id}')
-        self._clear_old_targets()
-
-    def _clear_old_targets(self):
-        # clear dead targets
+    @thread_error_catcher
+    def _clear_dead(self):
+        """
+        clear dead targets
+        """
         keys = []
         for tar in self._targets.values():
             # remove dead targets
@@ -246,37 +250,34 @@ class Identifier:
             else:
                 heapq.heappush(self._recycled_ids, k)
 
+    @thread_error_catcher
     def _generate_id(self) -> int:
-
+        """
+        generate id as small as possible
+        """
         try:
             return heapq.heappop(self._recycled_ids)
-
         except IndexError:
             return len(self._targets)
 
 
-class IdentifierTask(Identifier):
+class IdentifierTask(Tracker):
+    """
+    :param manager:IdentifyManager
+    """
+
     def __init__(
             self,
             jobs: ClosableQueue,
             results: ClosableQueue,
             manager: IdentifyManager):
-        """
-        Args:
-            jobs:
-            results:
-            identifier_params: { manager:IdentifyManager,
-                                 max_age: int = 120,
-                                 min_hits: int = 3,
-                                 iou_threshold: float = 0.3,}
-        """
         super().__init__(manager)
         self.jobs = jobs
         self.results = results
 
     @profile
     @thread_error_catcher
-    def run(self):
+    def run_identify(self):
         for img in self.jobs:
             identified = self.identified_results(img)
             self.results.put(identified)

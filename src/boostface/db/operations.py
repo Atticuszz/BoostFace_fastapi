@@ -1,4 +1,5 @@
 # coding=utf-8
+import traceback
 import warnings
 from pathlib import Path
 from timeit import default_timer
@@ -29,7 +30,28 @@ class Matcher:
         utility.wait_for_loading_complete(
             self._client.collection.name, timeout=10)
 
-    def __call__(self, embedding: Embedding) -> MatchInfo:
+    def __enter__(self):
+        """:
+        """
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """
+        Exit the runtime context and shut down the client. Logs exception if occurred.
+
+        :param exc_type: Exception type if an exception occurred.
+        :param exc_val: Exception value if an exception occurred.
+        :param exc_tb: Traceback information if an exception occurred.
+        """
+        if exc_type is not None:
+            print(f"An exception occurred: {exc_type.__name__}")
+            print(f"Exception message: {exc_val}")
+            print("Exception traceback:")
+            traceback.print_tb(exc_tb)
+
+        self._client.shut_down()
+
+    def search(self, embedding: Embedding) -> MatchInfo:
         """
         :param embedding: must be normed
         :return: uuid and score of matched face
@@ -43,9 +65,6 @@ class Matcher:
             ret = MatchInfo(uid=str(result['id']), score=result['score'])
         return ret
 
-    def shut_down(self):
-        self._client.shut_down()
-
 
 class Register:
     def __init__(self, client: MilvusClient):
@@ -57,12 +76,12 @@ class Register:
 
     def sign_up(self, images: Image, id: str):
         image2detect: Image2Detect = Image2Detect(images, [])
-        res_det: Image2Detect = self._detector(image2detect)
+        res_det: Image2Detect = self._detector.run_onnx(image2detect)
         if len(res_det.faces) != 1:
             warnings.warn("register image must have one face")
             return
 
-        embedding: Embedding = self._extractor(
+        embedding: Embedding = self._extractor.run_onnx(
             image2detect.nd_arr,
             res_det.faces[0].bbox,
             res_det.faces[0].kps,
@@ -105,4 +124,5 @@ if __name__ == '__main__':
             warnings.warn(f"image {image_path.name} is None")
             continue
         register.sign_up(img, image_path.name)
-        print(f"registered {i}/13261 image:{image_path.name} cost:{default_timer() - start}")
+        print(
+            f"registered {i}/13261 image:{image_path.name} cost:{default_timer() - start}")
