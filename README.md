@@ -1,72 +1,36 @@
-# BoostFace
+# BoostFace_fastapi
 
-## apps
+## Introduction
 
-### mobile ->user
+- cloud compute for extract and search face embedding
+- db backend for desktop and mobile app
 
-- frontend: react native
-- backend: fastapi
-  - basic functions
-    - login
-    - register to db
-    - state notification
-    - record check
-  - deeplearning
-    - face register
-      - detect
-      - extract and register to vector db
-      - check
-    - face recognition
-      - detect
-      - identify
+## deployment
 
-### web/desktop ->admin
+- docker compose
+  - fastapi cloud compute
+  - milvus-standalone
 
-- frontend: vue
-- backend: fastapi
-  - basic functions
-    - login
-    - show total state from db
-  - deeplearning
-    - process video stream and show results
-    - face recognition
-      - detect
-      - identify
+- cloud service
+  - digital ocean
+    - vps
 
-### modules
+## architecture
 
-- db
-  - vector db
-    - milvus_client -> self-host docker🐟
-  - sql db
-    - supabase -> cloud service☁️
-
-- deeplearning
-  - boostface-A for attendance
-    - identify
+- fastapi container
+  - main process
+    - identify-worker sub process
       - extract
         - arcface onnx
-      - match by milvus
-    - detect
-      - scrfd onnx
+      - register or search
+        - milvus
+    - fastapi thread
+      - basic request
+      - get face_image from front-end and add to worker queue be shared with identify-worker
+- milvus container
+  - milvus-standalone
+    - milvus
+    - minio
+    - milvus-etcd
 
-  - boostface-R for register
-    - detect
-      - scrfd onnx
-    - extract
-      - arcface onnx
-    - register
-      - milvus
 
-
-- mobile-fastapi- basic fun
-
-- mobile-fastapi
-  - register
-
-- web-fastapi- all in one
-  - attendance
-
-# TODO: boostface connect to vue socketio
-
-# TODO: fastapi with socketio
