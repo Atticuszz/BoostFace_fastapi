@@ -33,4 +33,17 @@
     - minio
     - milvus-etcd
 
+## Project Process🌈
+
+1. locally test fastapi cloud compute docker compose
+  1. login
+
+
+
+
+
+
+
+
+
 

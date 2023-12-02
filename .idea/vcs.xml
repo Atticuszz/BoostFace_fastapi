@@ -2,8 +2,6 @@
 <project version="4">
   <component name="VcsDirectoryMappings">
     <mapping directory="" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/../BoostFace" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/../BoostFace_pyqt6" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/../work_space_fastapi" vcs="Git" />
   </component>
 </project>
