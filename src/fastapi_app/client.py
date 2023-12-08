@@ -3,21 +3,39 @@ import asyncio
 import os
 
 from dotenv import load_dotenv
+from fastapi import HTTPException
+from gotrue import AuthResponse
+from gotrue.errors import AuthApiError
 from postgrest import APIResponse
-
-from src.fastapi_app.dependencies.decorator import retry
-from supabase_py_async import create_client, AsyncClient
+from supabase_py_async import AsyncClient, create_client
 from supabase_py_async.lib.client_options import ClientOptions
 
-load_dotenv()
+from fastapi_app.dependence import retry
 
 
 class SupaBase:
-    def __init__(self, url: str = os.getenv("SUPABASE_URL"),
-                 key: str = os.getenv("SUPABASE_KEY")):
-        self.client: AsyncClient = create_client(
-            url, key, options=ClientOptions(
-                postgrest_client_timeout=10, storage_client_timeout=10))
+    def __init__(self):
+        self.client: AsyncClient | None = None
+
+    def set_session(self, access_token: str, refresh_token: str):
+        """
+        refresh current session to the sender
+        :param access_token:
+        :param refresh_token:
+        """
+        self.client.auth.set_session(
+            access_token=access_token,
+            refresh_token=refresh_token)
+
+    async def sign_in(self, email: str, password: str) -> AuthResponse:
+        """sign in with email and password"""
+        try:
+            response: AuthResponse = await self.client.auth.sign_in_with_password(
+                {'email': email, 'password': password}
+            )
+        except AuthApiError:
+            raise HTTPException(status_code=400, detail="Invalid email or password")
+        return response
 
     @retry
     async def get_table(self, name: str, columns: list[str] | None = None) -> list[dict]:
@@ -61,6 +79,11 @@ supabase_client = SupaBase()
 
 
 async def main():
+    load_dotenv()
+    url: str = os.getenv("SUPABASE_URL")
+    key: str = os.getenv("SUPABASE_KEY")
+    supabase_client.client = await create_client(url, key, options=ClientOptions(
+        postgrest_client_timeout=10, storage_client_timeout=10))
     data = await supabase_client.get_table("task_done_list")
     print(data)
 
