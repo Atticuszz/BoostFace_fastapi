@@ -6,10 +6,10 @@ import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from supabase_py_async import create_client
-from supabase_py_async.lib.client_options import ClientOptions
 
 from fastapi_app.client import supabase_client
+from supabase_py_async import create_client
+from supabase_py_async.lib.client_options import ClientOptions
 
 
 @asynccontextmanager
@@ -37,7 +37,10 @@ def create_app() -> FastAPI:
 
     # Include the routers
     from fastapi_app.routers import auth_router
+    from fastapi_app.routers import identify_router
     app.include_router(auth_router)
+    app.include_router(identify_router)
+
     return app
 
 

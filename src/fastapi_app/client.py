@@ -3,38 +3,47 @@ import asyncio
 import os
 
 from dotenv import load_dotenv
-from fastapi import HTTPException
 from gotrue import AuthResponse
-from gotrue.errors import AuthApiError
 from postgrest import APIResponse
-from supabase_py_async import AsyncClient, create_client
-from supabase_py_async.lib.client_options import ClientOptions
 
 from fastapi_app.dependence import retry
+from supabase_py_async import AsyncClient, create_client
+from supabase_py_async.lib.client_options import ClientOptions
 
 
 class SupaBase:
     def __init__(self):
         self.client: AsyncClient | None = None
 
-    def set_session(self, access_token: str, refresh_token: str):
+    async def set_session(self, access_token: str, refresh_token: str) -> AuthResponse:
         """
-        refresh current session to the sender
+        set session
         :param access_token:
         :param refresh_token:
+        :return:AuthResponse
+        :exception AuthSessionMissingError: Could not set session
         """
-        self.client.auth.set_session(
-            access_token=access_token,
-            refresh_token=refresh_token)
+        response: AuthResponse = await self.client.auth.set_session(access_token=access_token,
+                                                                    refresh_token=refresh_token)
+        return response
+
+    async def refresh_session(self, refresh_token: str) -> AuthResponse:
+        """
+        refresh token
+        :exception AuthApiError: Could not refresh token
+        """
+        new_session: AuthResponse = await self.client.auth.refresh_session(refresh_token)
+
+        return new_session
 
     async def sign_in(self, email: str, password: str) -> AuthResponse:
-        """sign in with email and password"""
-        try:
-            response: AuthResponse = await self.client.auth.sign_in_with_password(
-                {'email': email, 'password': password}
-            )
-        except AuthApiError:
-            raise HTTPException(status_code=400, detail="Invalid email or password")
+        """
+        sign in with email and password
+        :exception AuthApiError: Invalid email or password
+        """
+        response: AuthResponse = await self.client.auth.sign_in_with_password(
+            {'email': email, 'password': password})
+
         return response
 
     @retry

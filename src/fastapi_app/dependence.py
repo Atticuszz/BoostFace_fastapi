@@ -3,6 +3,8 @@ from asyncio import sleep
 from functools import wraps
 
 from fastapi import Header, HTTPException
+from gotrue import AuthResponse
+from gotrue.errors import AuthSessionMissingError
 
 
 def retry(func):
@@ -20,23 +22,26 @@ def retry(func):
     return wrapper
 
 
-async def validate_user(authorization: str | None = Header(None)):
+async def validate_user(authorization: str | None = Header(None), refresh_token: str | None = Header(None)):
     """
-    refresh session
-    :param authorization:
+    Validate user session with access and refresh tokens
+    :param authorization: Authorization header containing the access token
+    :param refresh_token: Header containing the refresh token
     """
     from fastapi_app.client import supabase_client
-    if not authorization:
+    if not authorization or not refresh_token:
         raise HTTPException(status_code=401, detail="Unauthorized")
+
     tokens = authorization.split(" ")
+    if len(tokens) != 2 or tokens[0].lower() != "bearer":
+        raise HTTPException(status_code=401, detail="Invalid authorization header format")
 
-    if len(tokens) != 2:
-        raise HTTPException(status_code=401,
-                            detail="Invalid authorization header format")
+    access_token = tokens[1]
 
-    access_token, refresh_token = tokens
     try:
-        session = await supabase_client.set_session(access_token=access_token, refresh_token=refresh_token)
-        return session
-    except Exception:
-        raise HTTPException(status_code=401, detail="Invalid token")
+        # Assuming set_session requires both access and refresh tokens
+        response: AuthResponse = await supabase_client.set_session(access_token=access_token,
+                                                                   refresh_token=refresh_token)
+        return response.session
+    except AuthSessionMissingError as e:
+        raise HTTPException(status_code=401, detail=e.message)

@@ -36,7 +36,11 @@
 ## Project Process🌈
 
 1. locally test fastapi cloud compute docker compose
-  1. login
+    1. login router ✅
+    2. socket
+        1. access record ✅
+        2. face image
+        3. logging to remote
 
 
 
