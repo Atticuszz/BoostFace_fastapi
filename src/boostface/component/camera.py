@@ -5,14 +5,14 @@ cmd 运行setx OPENCV_VIDEOIO_PRIORITY_MSMF 0后重启，可以加快摄像头�
 """
 from enum import Enum
 from threading import Event
-from time import sleep
 from typing import NamedTuple
 
 import cv2
 from line_profiler_pycharm import profile
+from time import sleep
 
+from boostface.types import Image
 from .common import ClosableQueue, Image2Detect
-from ..types import Image
 from ..utils.decorator import thread_error_catcher
 
 

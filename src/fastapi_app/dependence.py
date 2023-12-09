@@ -28,7 +28,7 @@ async def validate_user(authorization: str | None = Header(None), refresh_token:
     :param authorization: Authorization header containing the access token
     :param refresh_token: Header containing the refresh token
     """
-    from fastapi_app.client import supabase_client
+    from fastapi_app.internal.client import supabase_client
     if not authorization or not refresh_token:
         raise HTTPException(status_code=401, detail="Unauthorized")
 

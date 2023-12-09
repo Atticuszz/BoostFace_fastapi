@@ -1,5 +1,5 @@
 # type alias
-from typing import NamedTuple
+
 
 import numpy as np
 from numpy._typing import NDArray
@@ -10,7 +10,3 @@ Embedding = NDArray[np.float64]  # shape: (512, )
 Image = NDArray[np.uint8]  # shape: (height, width, 3)
 Color = tuple[int, int, int]
 
-
-class MatchInfo(NamedTuple):
-    score: float
-    uid: str

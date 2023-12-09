@@ -1,7 +1,7 @@
 import numpy as np
 
+from boostface.types import MatchInfo
 from src.boostface.component.common import Face2Search, FaceNew, Image2Detect
-from src.boostface.types import MatchInfo
 
 
 def generate_normalized_embeddings(n, dim=512):

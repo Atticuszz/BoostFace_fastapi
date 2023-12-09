@@ -9,11 +9,11 @@ from pathlib import Path
 import numpy as np
 from line_profiler_pycharm import profile
 
+from boostface.types import Image, Bbox, Kps, Embedding, MatchInfo
 from .common import Face, Target, IdentifyManager, Image2Detect, FaceNew, Face2Search, ClosableQueue
 from .sort_plus import associate_detections_to_trackers
 from ..db.operations import Matcher
 from ..model_zoo import get_model, ArcFaceONNX
-from ..types import Image, Bbox, Kps, Embedding, MatchInfo
 from ..utils.decorator import thread_error_catcher
 
 matched_and_in_screen_deque = collections.deque(maxlen=1)

@@ -2,16 +2,16 @@ import multiprocessing
 import queue
 import uuid
 from queue import Queue
-from time import sleep
 from timeit import default_timer
 from typing import NamedTuple
 
 import numpy as np
 from line_profiler_pycharm import profile
 from numpy.linalg import norm as l2norm
+from time import sleep
 
+from boostface.types import Image, Bbox, Kps, Color, Embedding, MatchInfo
 from .sort_plus import KalmanBoxTracker
-from ..types import Image, Bbox, Kps, Color, Embedding, MatchInfo
 
 
 class Face(dict):

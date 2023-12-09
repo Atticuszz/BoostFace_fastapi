@@ -7,7 +7,8 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from fastapi_app.client import supabase_client
+from fastapi_app.internal import logger
+from fastapi_app.internal.client import supabase_client
 from supabase_py_async import create_client
 from supabase_py_async.lib.client_options import ClientOptions
 
@@ -20,6 +21,7 @@ async def lifespan(app: FastAPI):
     supabase_client.client = await create_client(url, key, options=ClientOptions(
         postgrest_client_timeout=10, storage_client_timeout=10))
     assert supabase_client.client is not None
+    logger.info("supabase client created")
     yield
 
 

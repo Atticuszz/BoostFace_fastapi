@@ -10,9 +10,9 @@ from numpy import ndarray
 from numpy.linalg import norm
 from pymilvus.orm import utility
 
+from boostface.types import MatchInfo, Image
 from src.boostface.component.common import Embedding, Image2Detect
 from src.boostface.db.milvus_client import MilvusClient
-from src.boostface.types import MatchInfo, Image
 
 __all__ = ["Register", "Matcher"]
 

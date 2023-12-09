@@ -2,45 +2,24 @@ import asyncio
 import datetime
 
 from fastapi import APIRouter, WebSocket, Depends
-from websockets.exceptions import ConnectionClosedOK
+from websockets.exceptions import ConnectionClosedOK, ConnectionClosedError
 
 from fastapi_app.dependence import validate_user
-from fastapi_app.model import identifyResult
+from fastapi_app.internal import identifyResult
+from fastapi_app.internal import logger, log_queue
+from fastapi_app.internal.client import web_socket_manager
 
 identify_router = APIRouter(prefix="/identify", tags=["identify"])
 
 
-class ConnectionManager:
-    def __init__(self):
-        self.active_connections: dict[str, WebSocket] = {}
-
-    async def connect(self, websocket: WebSocket, client_id: str):
-        """connect"""
-        await websocket.accept()
-        self.active_connections[client_id] = websocket
-
-    async def disconnect(self, client_id: str):
-        """disconnect"""
-        await self.active_connections[client_id].close()
-        del self.active_connections[client_id]
-
-    async def broadcast(self, message: str):
-        for connection in self.active_connections.values():
-            await connection.send_text(message)
-
-
-manager = ConnectionManager()
-
-
 @identify_router.websocket("/ws/{client_id}")
-async def websocket_endpoint(websocket: WebSocket, client_id: str, session=Depends(validate_user)):
+async def identify_ws(websocket: WebSocket, client_id: str, session=Depends(validate_user)):
     """
     :param client_id:
     :param websocket:
     :param session:
-    :return:
     """
-    await manager.connect(websocket, client_id)
+    await web_socket_manager.connect(websocket, client_id, category="identify")
     try:
         while True:
             # test identifyResult
@@ -54,9 +33,28 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, session=Depen
             await asyncio.sleep(1)  # 示例延时
             # test identifyResult
 
-
-
-
     except ConnectionClosedOK:
-        await manager.disconnect(client_id)
-        await manager.broadcast(f"Client #{client_id} left the chat")
+        await web_socket_manager.disconnect(client_id)
+        await web_socket_manager.broadcast(f"Client #{client_id} left the chat")
+
+
+@identify_router.websocket("/cloud_logging/ws/{client_id}")
+async def cloud_logging_ws(websocket: WebSocket, client_id: str, session=Depends(validate_user)):
+    """
+    :param client_id:
+    :param websocket:
+    """
+    await web_socket_manager.connect(websocket, client_id, category="cloud_logging")
+    try:
+        while True:
+            # test cloud_logging
+            logger.info(f"Client #{client_id} joined the chat")
+
+            message: str = await log_queue.get()
+            await asyncio.sleep(2)
+            await web_socket_manager.broadcast(message, category="cloud_logging")
+            # test cloud_logging
+
+    except (ConnectionClosedOK, ConnectionClosedError) as e:
+        await web_socket_manager.disconnect(client_id)
+        await web_socket_manager.broadcast(f"Client #{client_id} left the chat, {e}")
