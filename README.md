@@ -40,7 +40,8 @@
     2. socket
         1. access record ✅
         2. face image
-        3. logging to remote
+        3. logging to remote ✅
+        4. system monitor ✅
 
 
 
