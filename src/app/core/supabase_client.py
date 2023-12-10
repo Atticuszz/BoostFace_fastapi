@@ -1,17 +1,12 @@
 # coding=utf-8
+"""
+auth and curd supabase
+"""
 import asyncio
-import os
 
-from dotenv import load_dotenv
-from gotrue import AuthResponse
-from postgrest import APIResponse
-from starlette.websockets import WebSocket
-from websockets.exceptions import ConnectionClosedOK, ConnectionClosedError
-
-from fastapi_app.dependence import retry
-from fastapi_app.internal import logger
 from supabase_py_async import AsyncClient, create_client
 from supabase_py_async.lib.client_options import ClientOptions
+from ..common import AuthResponse, APIResponse, retry
 
 
 class SupaBase:
@@ -20,10 +15,7 @@ class SupaBase:
 
     async def set_session(self, access_token: str, refresh_token: str) -> AuthResponse:
         """
-        set session
-        :param access_token:
-        :param refresh_token:
-        :return:AuthResponse
+        set session for continue curd supabase
         :exception AuthSessionMissingError: Could not set session
         """
         response: AuthResponse = await self.client.auth.set_session(access_token=access_token,
@@ -32,7 +24,7 @@ class SupaBase:
 
     async def refresh_session(self, refresh_token: str) -> AuthResponse:
         """
-        refresh token
+        refresh token for front end
         :exception AuthApiError: Could not refresh token
         """
         new_session: AuthResponse = await self.client.auth.refresh_session(refresh_token)
@@ -87,37 +79,12 @@ class SupaBase:
         return
 
 
-class WebSocketManager:
-    """ WebSocket manager"""
-
-    def __init__(self):
-        self.active_connections: dict[str, tuple[WebSocket, str]] = {}
-
-    async def connect(self, websocket: WebSocket, client_id: str, category: str):
-        """Connect with category."""
-        await websocket.accept()
-        self.active_connections[client_id] = (websocket, category)
-
-    async def disconnect(self, client_id: str):
-        """Disconnect."""
-        await self.active_connections[client_id][0].close()
-        del self.active_connections[client_id]
-
-    async def broadcast(self, message: str, category: str = None):
-        """Broadcast message to all connections or specific category."""
-        try:
-            for websocket, cat in self.active_connections.values():
-                if category is None or cat == category:
-                    await websocket.send_text(message)
-        except (ConnectionClosedOK, ConnectionClosedError):
-            logger.warn("broadcast to the websocket is closed ")
-
-
-web_socket_manager = WebSocketManager()
 supabase_client = SupaBase()
 
 
 async def main():
+    import os
+    from dotenv import load_dotenv
     load_dotenv()
     url: str = os.getenv("SUPABASE_URL")
     key: str = os.getenv("SUPABASE_KEY")

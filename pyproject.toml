@@ -24,6 +24,7 @@ scikit-image = "^0.22.0"
 line-profiler = "^4.1.1"
 setuptools = "^68.2.2"
 line-profiler-pycharm = "^1.1.0"
+psutil = "^5.9.6"
 
 
 [build-system]

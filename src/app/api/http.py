@@ -1,11 +1,10 @@
 # coding=utf-8
-from fastapi import APIRouter, HTTPException
-from gotrue import AuthResponse, Session
-from gotrue.errors import AuthApiError
+from fastapi import APIRouter
 
-from fastapi_app.internal import logger
-from fastapi_app.internal.client import supabase_client
-from fastapi_app.internal.model import UserLogin
+from ..common import AuthResponse, Session, AuthApiError, HTTPException
+from ..core.config import logger
+from ..core.supabase_client import supabase_client
+from ..schemas import UserLogin
 
 auth_router = APIRouter(prefix="/auth", tags=["auth"])
 
