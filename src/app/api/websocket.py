@@ -3,18 +3,19 @@ import asyncio
 import datetime
 
 from fastapi import APIRouter, Depends, WebSocket
+from websockets.exceptions import ConnectionClosedOK, ConnectionClosedError
 
 from .deps import validate_user
-from ..common import ConnectionClosedOK, ConnectionClosedError, TypedWebSocket
+from ..common import TypedWebSocket
 from ..core import web_socket_manager
 from ..core.config import logger, log_queue
 from ..schemas import IdentifyResult, SystemStats
-from ..utils import cloud_system_stats
+from ..utils.system_stats import cloud_system_stats
 
 identify_router = APIRouter(prefix="/identify", tags=["identify"])
 
 
-@identify_router.websocket("/ws/{client_id}")
+@identify_router.websocket("/identify/ws/{client_id}")
 async def identify_ws(websocket: WebSocket, client_id: str, session=Depends(validate_user)):
     """
     :param client_id:
@@ -27,6 +28,7 @@ async def identify_ws(websocket: WebSocket, client_id: str, session=Depends(vali
         category="identify")
     await web_socket_manager.connect(typed_ws)
     while True:
+        # TODO: handle face images
         # test identifyResult
         try:
             time_now = datetime.datetime.now()
@@ -65,7 +67,7 @@ async def cloud_logging_ws(websocket: WebSocket, client_id: str, session=Depends
             await web_socket_manager.broadcast(message, category="cloud_logging")
             # test cloud_logging
 
-        except (ConnectionClosedOK, ConnectionClosedError):
+        except (ConnectionClosedOK, ConnectionClosedError, RuntimeError):
             await web_socket_manager.disconnect(typed_ws)
             break
 
@@ -90,6 +92,6 @@ async def cloud_system_monitor(websocket: WebSocket, client_id: str, session=Dep
             await asyncio.sleep(1)
             await web_socket_manager.broadcast(message, category=category)
 
-        except (ConnectionClosedOK, ConnectionClosedError):
+        except (ConnectionClosedOK, ConnectionClosedError, RuntimeError):
             await web_socket_manager.disconnect(typed_ws)
             break

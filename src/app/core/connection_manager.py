@@ -1,7 +1,8 @@
 # coding=utf-8
+from starlette.websockets import WebSocketState
 
 from .config import logger
-from ..common import TypedWebSocket, WebSocketState
+from ..common import TypedWebSocket
 
 
 class WebSocketManager:

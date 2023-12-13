@@ -1,7 +1,8 @@
 # coding=utf-8
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
+from gotrue import Session, AuthResponse
+from gotrue.errors import AuthApiError
 
-from ..common import AuthResponse, Session, AuthApiError, HTTPException
 from ..core.config import logger
 from ..core.supabase_client import supabase_client
 from ..schemas import UserLogin

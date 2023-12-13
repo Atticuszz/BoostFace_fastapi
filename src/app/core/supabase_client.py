@@ -4,9 +4,12 @@ auth and curd supabase
 """
 import asyncio
 
+from gotrue import AuthResponse
+from postgrest import APIResponse
+
 from supabase_py_async import AsyncClient, create_client
 from supabase_py_async.lib.client_options import ClientOptions
-from ..common import AuthResponse, APIResponse, retry
+from ..common import retry
 
 
 class SupaBase:

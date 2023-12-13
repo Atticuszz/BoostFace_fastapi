@@ -31,7 +31,7 @@ def read_video(res_queue: ClosableQueue):
         if cv2.waitKey(1) == ord('q'):
             break
 
-
+# TODO: reduce to adapt the cloud fun for fastapi
 def boostface(identifier_manager: IdentifyManager, if_done: Event):
     """start BoostFace application.
     :param identifier_manager: IdentifyManager
