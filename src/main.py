@@ -5,7 +5,6 @@ https://aka.ms/vs/17/release/vc_redist.x64.exe onnx需要的库
 from concurrent.futures import ThreadPoolExecutor
 
 from line_profiler_pycharm import profile
-
 from my_insightface.insightface.app.camera import camera_read_done, camera_task
 from my_insightface.insightface.app.detector import detect_task
 from my_insightface.insightface.app.drawer import streaming_event, draw2web_task
@@ -53,7 +52,7 @@ def main():
             streaming_event.clear()
             print("streaming_event.clear()")
             identifier_task.stop_milvus()
-            socketio_app.stop()
+            socketio_app.stop_thread()
             print("socketio.stop()")
             print("all done")
 

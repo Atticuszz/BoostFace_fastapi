@@ -13,6 +13,7 @@ from ..schemas import IdentifyResult, SystemStats
 from ..utils.system_stats import cloud_system_stats
 
 identify_router = APIRouter(prefix="/identify", tags=["identify"])
+# TODO: websocket decorator
 
 
 @identify_router.websocket("/identify/ws/{client_id}")
