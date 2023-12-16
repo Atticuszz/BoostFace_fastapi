@@ -32,17 +32,16 @@ class WebSocketManager:
 
     async def connect(self, typed_websocket: TypedWebSocket):
         """Connect with category."""
-        logger.debug(
-            f"connect called:{typed_websocket.category} {typed_websocket.client_id}")
+        logger.debug(f"connect called:{typed_websocket.category} {typed_websocket.client_id}")
         await typed_websocket.ws.accept()
         self.active_connections.append(typed_websocket)
 
     async def disconnect(self, typed_websocket: TypedWebSocket):
         """Disconnect."""
-        await typed_websocket.ws.close()
+        if typed_websocket.ws.client_state != WebSocketState.DISCONNECTED:
+            await typed_websocket.ws.close()
         self.active_connections.remove(typed_websocket)
-        logger.info(
-            f"category:{typed_websocket.category}  client_id:{typed_websocket.client_id} Connection closed")
+        logger.info(f"category:{typed_websocket.category}  client_id:{typed_websocket.client_id} Connection closed")
 
     async def broadcast(self, message: str, category: str = None):
         """Broadcast message to all connections or specific category.
@@ -63,29 +62,26 @@ class WebSocketConnection:
 
     async def send_data(self, data: BaseModel | str):
         """Send data as JSON or str
-        :exception TypeError
+        :exception TypeError,RuntimeError
         """
         if isinstance(data, BaseModel):
-            await self.typed_websocket.ws.send_json(data.model_dump_json())
+            await self.typed_websocket.ws.send_text(data.model_dump_json())
         elif isinstance(data, str):
             await self.typed_websocket.ws.send_text(data)
         else:
-            logger.warn(f"send_data: data:{data} failed")
             raise TypeError("data must be BaseModel or str")
 
     async def receive_data(self, data_model: Type[BaseModel] | None = None) -> BaseModel | str:
         """Receive and decode data.
-        :exception TypeError
+        :exception TypeError，RuntimeError
         """
-        if issubclass(data_model, BaseModel):
-            received_data = await self.typed_websocket.ws.receive_text()
-            return data_model.model_validate_json(received_data)
-        elif data_model is None:
+        if data_model is None:
             received_data = await self.typed_websocket.ws.receive_text()
             return received_data
+        elif issubclass(data_model, BaseModel):
+            received_data = await self.typed_websocket.ws.receive_text()
+            return data_model.model_validate_json(received_data)
         else:
-            logger.warn(
-                f"receive_data: data_model:{data_model} received_data: None failed")
             raise TypeError(
                 "data_model must be a subclass of BaseModel or None")
 
@@ -96,7 +92,6 @@ def websocket_endpoint(category: str):
     logger.debug(f"websocket_endpoint1 called:{category}")
 
     def decorator(func):
-        # FIXME validate_users stop the connection
         async def wrapper(websocket: WebSocket, client_id: str, session=Depends(validate_user)):
             logger.debug(f"websocket_endpoint called:{category} {client_id}")
             async with web_socket_manager.handle_connection(websocket, client_id, category) as typed_ws:

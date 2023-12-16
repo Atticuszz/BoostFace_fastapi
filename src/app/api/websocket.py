@@ -2,8 +2,9 @@
 import asyncio
 import datetime
 
-from fastapi import APIRouter, Depends,WebSocket
+from fastapi import APIRouter, Depends, WebSocket
 from gotrue import Session
+from starlette.websockets import WebSocketDisconnect
 
 from websockets.exceptions import ConnectionClosedOK, ConnectionClosedError
 
@@ -16,14 +17,13 @@ from ..utils.system_stats import cloud_system_stats
 identify_router = APIRouter(prefix="/identify", tags=["identify"])
 
 
-# TODO: websocket decorator
+
 
 
 @identify_router.websocket("/identify/ws/{client_id}")
 @websocket_endpoint(category="identify")
 async def identify_ws(connection: WebSocketConnection, session: Session):
     while True:
-        # TODO: handle face images
         # test identifyResult
         try:
             rec_data = await connection.receive_data(Face2SearchSchema)
@@ -35,11 +35,12 @@ async def identify_ws(connection: WebSocketConnection, session: Session):
                 id=session.user.id,
                 name=session.user.user_metadata.get("name"),
                 time=time_now.strftime("%Y-%m-%d %H:%M:%S"),
-
+                uid=search_data.uid,
+                score=0.99
             )
             await connection.send_data(result)
             await asyncio.sleep(1)  # 示例延时
-        except (ConnectionClosedOK, ConnectionClosedError, RuntimeError) as e:
+        except (ConnectionClosedOK, ConnectionClosedError, RuntimeError, WebSocketDisconnect) as e:
             logger.info(
                 f"occurred error {e} Client #{session.user.id} left the chat")
             break
@@ -59,7 +60,7 @@ async def cloud_logging_ws(connection: WebSocketConnection, session: Session):
             await web_socket_manager.broadcast(message, category="cloud_logging")
             # test cloud_logging
 
-        except (ConnectionClosedOK, ConnectionClosedError, RuntimeError) as e:
+        except (ConnectionClosedOK, ConnectionClosedError, RuntimeError, WebSocketDisconnect) as e:
             logger.info(
                 f"occurred error {e} Client #{session.user.id} left the chat")
             break
@@ -75,24 +76,25 @@ async def cloud_system_monitor(connection: WebSocketConnection, session: Session
             await asyncio.sleep(1)
             await web_socket_manager.broadcast(message, category='cloud_system_monitor')
 
-        except (ConnectionClosedOK, ConnectionClosedError, RuntimeError) as e:
+        except (ConnectionClosedOK, ConnectionClosedError, RuntimeError, WebSocketDisconnect) as e:
             logger.info(
                 f"occurred error {e} Client #{session.user.id} left the chat")
             break
 
-# FIXME: websocket_endpoint can not connect normally
+
+
+
 @identify_router.websocket("/test/ws/{client_id}")
 @websocket_endpoint(category="test")
-async def test_connect(websocket: WebSocket, client_id: str):
+async def test_connect(connection: WebSocketConnection, session: Session):
     """ cloud_system_monitor websocket"""
-    await websocket.accept()
     while True:
         try:
-            data = await websocket.receive_text()
+            data = await connection.receive_data()
             logger.debug(f"test websocket receive data:{data}")
-            await websocket.send_text(data)
+            await connection.send_data(data)
             logger.debug(f"test websocket send data:{data}")
-        except (ConnectionClosedOK, ConnectionClosedError, RuntimeError) as e:
+        except (ConnectionClosedOK, ConnectionClosedError, RuntimeError, WebSocketDisconnect) as e:
             logger.info(
-                f"occurred error {e} Client  left the chat")
+                f"occurred error {e} Client {session.user.id} left the chat")
             break

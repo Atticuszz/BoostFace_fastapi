@@ -31,14 +31,6 @@ def create_app() -> FastAPI:
 app = create_app()
 
 
-@app.websocket("/ws/{client_id}")
-async def websocket_endpoint(websocket: WebSocket, client_id: str):
-    await websocket.accept()
-    while True:
-        data = await websocket.receive_text()
-        await websocket.send_text(f"Message text was: {data}")
-
-
 def server_run(debug: bool = False, port: int = 5000):
     if not debug:
         # Run FastAPI with reload
