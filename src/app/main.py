@@ -3,6 +3,7 @@ import subprocess
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.websockets import WebSocket
 
 from app.core import lifespan
 
@@ -28,6 +29,14 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
+
+
+@app.websocket("/ws/{client_id}")
+async def websocket_endpoint(websocket: WebSocket, client_id: str):
+    await websocket.accept()
+    while True:
+        data = await websocket.receive_text()
+        await websocket.send_text(f"Message text was: {data}")
 
 
 def server_run(debug: bool = False, port: int = 5000):

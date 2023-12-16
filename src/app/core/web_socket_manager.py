@@ -19,6 +19,7 @@ class WebSocketManager:
     @asynccontextmanager
     async def handle_connection(self, websocket: WebSocket, client_id: str, category: str):
         """Handle connection."""
+        logger.debug(f"handle_connection called:{category} {client_id}")
         typed_ws = TypedWebSocket(
             ws=websocket,
             client_id=client_id,
@@ -31,6 +32,8 @@ class WebSocketManager:
 
     async def connect(self, typed_websocket: TypedWebSocket):
         """Connect with category."""
+        logger.debug(
+            f"connect called:{typed_websocket.category} {typed_websocket.client_id}")
         await typed_websocket.ws.accept()
         self.active_connections.append(typed_websocket)
 
@@ -48,7 +51,7 @@ class WebSocketManager:
         for typed_ws in self.active_connections:
             # note: the active connection may be closed ,we need to check it
             if (category is None or typed_ws.category ==
-                category) and typed_ws.ws.client_state == WebSocketState.CONNECTED:
+                    category) and typed_ws.ws.client_state == WebSocketState.CONNECTED:
                 await typed_ws.ws.send_text(message)
 
 
@@ -90,9 +93,12 @@ class WebSocketConnection:
 def websocket_endpoint(category: str):
     """Decorator for websocket endpoints."""
     from ..api.deps import validate_user
+    logger.debug(f"websocket_endpoint1 called:{category}")
 
     def decorator(func):
+        # FIXME validate_users stop the connection
         async def wrapper(websocket: WebSocket, client_id: str, session=Depends(validate_user)):
+            logger.debug(f"websocket_endpoint called:{category} {client_id}")
             async with web_socket_manager.handle_connection(websocket, client_id, category) as typed_ws:
                 connection = WebSocketConnection(typed_ws)
                 return await func(connection, session)

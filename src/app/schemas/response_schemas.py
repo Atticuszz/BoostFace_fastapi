@@ -6,8 +6,10 @@ from app.utils.system_stats import CloudSystemStats
 
 class IdentifyResult(BaseModel):
     id: str
+    uid: str
     name: str
     time: str
+    score: float
 
 
 class SystemStats(BaseModel):

@@ -2,9 +2,12 @@
 import asyncio
 import datetime
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends,WebSocket
 from gotrue import Session
+
 from websockets.exceptions import ConnectionClosedOK, ConnectionClosedError
+
+from .deps import validate_user
 from ..core import web_socket_manager, websocket_endpoint, WebSocketConnection
 from ..core.config import logger, log_queue
 from ..schemas import IdentifyResult, SystemStats, Face2SearchSchema, Face2Search
@@ -32,6 +35,7 @@ async def identify_ws(connection: WebSocketConnection, session: Session):
                 id=session.user.id,
                 name=session.user.user_metadata.get("name"),
                 time=time_now.strftime("%Y-%m-%d %H:%M:%S"),
+
             )
             await connection.send_data(result)
             await asyncio.sleep(1)  # 示例延时
@@ -42,7 +46,7 @@ async def identify_ws(connection: WebSocketConnection, session: Session):
 
 
 @identify_router.websocket("/cloud_logging/ws/{client_id}")
-@websocket_endpoint(category="cloud_logging")
+@websocket_endpoint(category="cloud_log")
 async def cloud_logging_ws(connection: WebSocketConnection, session: Session):
     """ cloud_logging websocket"""
     while True:
@@ -74,4 +78,21 @@ async def cloud_system_monitor(connection: WebSocketConnection, session: Session
         except (ConnectionClosedOK, ConnectionClosedError, RuntimeError) as e:
             logger.info(
                 f"occurred error {e} Client #{session.user.id} left the chat")
+            break
+
+# FIXME: websocket_endpoint can not connect normally
+@identify_router.websocket("/test/ws/{client_id}")
+@websocket_endpoint(category="test")
+async def test_connect(websocket: WebSocket, client_id: str):
+    """ cloud_system_monitor websocket"""
+    await websocket.accept()
+    while True:
+        try:
+            data = await websocket.receive_text()
+            logger.debug(f"test websocket receive data:{data}")
+            await websocket.send_text(data)
+            logger.debug(f"test websocket send data:{data}")
+        except (ConnectionClosedOK, ConnectionClosedError, RuntimeError) as e:
+            logger.info(
+                f"occurred error {e} Client  left the chat")
             break

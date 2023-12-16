@@ -1,5 +1,6 @@
 # coding=utf-8
 import base64
+from dataclasses import dataclass
 from typing import NamedTuple
 
 import numpy as np
@@ -18,23 +19,26 @@ class UserLogin(BaseModel):
 
 
 class Face2SearchSchema(BaseModel):
+    """Face2Search schema"""
     face_img: str = Field(..., description="Base64 encoded image data")
     bbox: list[float] = Field(...,
                               description="Bounding box coordinates")
     kps: list[list[float]] = Field(..., description="Keypoints")
     det_score: float = Field(..., description="Detection score")
+    uid: str = Field(..., description="Face ID")
 
 
 # 定义 Face2Search
-class Face2Search(NamedTuple):
-    # TODO: rebuild to face2search
+@dataclass
+class Face2Search:
     face_img: Image
     bbox: Bbox
     kps: Kps
     det_score: float
+    uid: str
 
-    @staticmethod
-    def from_schema(schema: BaseModel) -> "Face2Search":
+    @classmethod
+    def from_schema(cls, schema: BaseModel) -> "Face2Search":
         # 将 base64 编码的图像转换为 Image 类型 (NumPy ndarray)
         image_data = base64.b64decode(schema.face_img)
         image = np.frombuffer(image_data, dtype=np.uint8)  # 假设解码后为正确的图像数据格式
@@ -43,9 +47,10 @@ class Face2Search(NamedTuple):
         bbox = np.array(schema.bbox, dtype=np.float64)
         kps = np.array(schema.kps, dtype=np.float64)
 
-        return Face2Search(
+        return cls(
             face_img=image,
             bbox=bbox,
             kps=kps,
-            det_score=schema.det_score
+            det_score=schema.det_score,
+            uid=schema.uid
         )
