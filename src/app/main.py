@@ -3,8 +3,6 @@ import subprocess
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.websockets import WebSocket
-
 from app.core import lifespan
 
 
@@ -30,7 +28,7 @@ def create_app() -> FastAPI:
 
 app = create_app()
 
-
+# TODO: start in docker
 def server_run(debug: bool = False, port: int = 5000):
     if not debug:
         # Run FastAPI with reload

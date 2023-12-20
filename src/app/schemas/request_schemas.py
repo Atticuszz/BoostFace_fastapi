@@ -1,21 +1,18 @@
 # coding=utf-8
 import base64
 from dataclasses import dataclass
-from typing import NamedTuple
 
 import numpy as np
-from numpy._typing import NDArray
 from pydantic import BaseModel, Field
 
-Kps = NDArray[np.float64]  # shape: (5, 2)
-Bbox = NDArray[np.float64]  # shape: (4, 2)
-Embedding = NDArray[np.float64]  # shape: (512, )
-Image = NDArray[np.uint8]  # shape: (height, width, 3)
+from app.services.inference.common import Face, Kps, Bbox, Image
 
 
 class UserLogin(BaseModel):
     email: str
     password: str
+
+# TODO:bbox is not necessary
 
 
 class Face2SearchSchema(BaseModel):
@@ -39,6 +36,7 @@ class Face2Search:
 
     @classmethod
     def from_schema(cls, schema: BaseModel) -> "Face2Search":
+        """init from request schema"""
         # 将 base64 编码的图像转换为 Image 类型 (NumPy ndarray)
         image_data = base64.b64decode(schema.face_img)
         image = np.frombuffer(image_data, dtype=np.uint8)  # 假设解码后为正确的图像数据格式
@@ -54,3 +52,12 @@ class Face2Search:
             det_score=schema.det_score,
             uid=schema.uid
         )
+
+    def to_face(self) -> Face:
+        """turn into face"""
+        return Face(
+            img=self.face_img,
+            face_id=self.uid,
+            kps=self.kps,
+            det_score=self.det_score,
+            embedding=None)

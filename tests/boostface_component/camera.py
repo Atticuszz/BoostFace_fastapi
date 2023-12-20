@@ -7,7 +7,7 @@ import cv2
 import numpy as np
 
 from src.boostface.component.camera import CameraTask
-from src.boostface.component.common import ClosableQueue
+from app.services.inference.common import ClosableQueue
 
 
 def read_video(res_queue: ClosableQueue):

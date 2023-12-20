@@ -9,7 +9,7 @@ from pymilvus import (
 )
 from app.core.config import logger
 from .configs import ClientConfig, basic_config, embedding_field, id_field
-from ..utils.checker import insert_data_check
+from ..inference.utils.checker import insert_data_check
 
 __all__ = ["milvus_client"]
 
@@ -28,24 +28,24 @@ class MilvusClient:
             self._config: ClientConfig = config
         else:
             self._config: ClientConfig = basic_config
-        logger.dubug(f"\nMilvusClient init under config: {self._config}")
+        logger.debug(f"\nMilvusClient init under config: {self._config}")
         self._flush_threshold = flush_threshold
         self._new_added = 0
         self._kwargs = {"refresh": refresh, 'flush_threshold': flush_threshold}
         self._connect_to_milvus()
         self.collection = self._create_collection()
-        logger.dubug("\nlist collections:")
-        logger.dubug(utility.list_collections())
-        logger.dubug(f"\nMlilvus init done.")
+        logger.debug("\nlist collections:")
+        logger.debug(utility.list_collections())
+        logger.debug(f"\nMlilvus init done.")
 
     def _connect_to_milvus(self):
-        logger.dubug(f"\nCreate connection...")
+        logger.debug(f"\nCreate connection...")
         connections.connect(
             host=self._config.host,
             port=self._config.port,
             timeout=120)
-        logger.dubug(f"\nList connections:")
-        logger.dubug(connections.list_connections())
+        logger.debug(f"\nList connections:")
+        logger.debug(connections.list_connections())
 
     # 创建一个的集合
     def _create_collection(self) -> Collection:
@@ -53,19 +53,19 @@ class MilvusClient:
                 utility.has_collection(self._config.collection.name)
                 and not self._kwargs["refresh"]
         ):
-            logger.dubug(f"\nFound collection: {self._config.collection.name}")
+            logger.debug(f"\nFound collection: {self._config.collection.name}")
             # 2023-7-31 new: 如果存在直接返回 collection
             return Collection(self._config.collection.name)
         elif utility.has_collection(self._config.collection.name) and self._kwargs["refresh"]:
-            logger.dubug(
+            logger.debug(
                 f"\nFound collection: {self._config.collection.name}, deleting...")
             utility.drop_collection(self._config.collection.name)
-            logger.dubug(f"Collection {self._config.collection.name} deleted.")
+            logger.debug(f"Collection {self._config.collection.name} deleted.")
 
-        logger.dubug(
+        logger.debug(
             f"\nCollection {self._config.collection.name} is creating...")
         collection = Collection(**self._config.collection.as_dict())
-        logger.dubug("collection created:", self._config.collection.name)
+        logger.debug("collection created:", self._config.collection.name)
         return collection
 
     def insert(self, entities: list[ndarray, ndarray, ndarray]):
@@ -74,25 +74,25 @@ class MilvusClient:
         :param entities: [[id:int64],[name:str,len<50],[normed_embedding:float32,shape(512,)]]
         :return:
         """
-        # logger.dubug 当前collection的数据量
-        logger.dubug(
+        # logger.debug 当前collection的数据量
+        logger.debug(
             f"\nbefore_inserting,Collection:[{self._config.collection.name}] has {self.collection.num_entities} entities."
         )
 
-        logger.dubug("\nEntities check...")
+        logger.debug("\nEntities check...")
         entities = insert_data_check(entities)
-        logger.dubug("\nInsert data...")
+        logger.debug("\nInsert data...")
         self.collection.insert(entities)
 
-        logger.dubug(f"Done inserting new {len(entities[0])}data.")
+        logger.debug(f"Done inserting new {len(entities[0])}data.")
         if not self.collection.has_index():  # 如果没有index，手动创建
             # Call the flush API to make inserted data immediately available
             # for search
             self.collection.flush()  # 新插入的数据在segment中达到一定阈值会自动构建index，持久化
-            logger.dubug("\nCreate index...")
+            logger.debug("\nCreate index...")
             self._create_index()
             # 将collection 加载到到内存中
-            logger.dubug("\nLoad collection to memory...")
+            logger.debug("\nLoad collection to memory...")
             self.collection.load()
             utility.wait_for_loading_complete(
                 self._config.collection.name, timeout=10)
@@ -103,20 +103,20 @@ class MilvusClient:
             # 从而实现动态 一边查询，一边插入
             self._new_added += 1
             if self._new_added >= self._flush_threshold:
-                logger.dubug("\nFlush...")
+                logger.debug("\nFlush...")
                 self.collection.flush()
                 self._new_added = 0
                 self.collection.load(_async=True)
 
-        # logger.dubug 当前collection的数据量
-        logger.dubug(
+        # logger.debug 当前collection的数据量
+        logger.debug(
             f"after_inserting,Collection:[{self._config.collection.name}] has {self.collection.num_entities} entities."
         )
     # FIXME: failed
     # 向集合中插入实体
 
     def insert_from_files(self, file_paths: list):  # failed
-        logger.dubug("\nInsert data...")
+        logger.debug("\nInsert data...")
         # 3. insert entities
         task_id = utility.do_bulk_insert(
             collection_name=self._config.collection.name,
@@ -124,21 +124,21 @@ class MilvusClient:
             files=file_paths,
         )
         task = utility.get_bulk_insert_state(task_id=task_id)
-        logger.dubug("Task state:", task.state_name)
-        logger.dubug("Imported files:", task.files)
-        logger.dubug("Collection name:", task.collection_name)
-        logger.dubug("Start time:", task.create_time_str)
-        logger.dubug("Entities ID array generated by this task:", task.ids)
+        logger.debug("Task state:", task.state_name)
+        logger.debug("Imported files:", task.files)
+        logger.debug("Collection name:", task.collection_name)
+        logger.debug("Start time:", task.create_time_str)
+        logger.debug("Entities ID array generated by this task:", task.ids)
         while task.state_name != "Completed":
             task = utility.get_bulk_insert_state(task_id=task_id)
-            logger.dubug("Task state:", task.state_name)
-            logger.dubug("Imported row count:", task.row_count)
+            logger.debug("Task state:", task.state_name)
+            logger.debug("Imported row count:", task.row_count)
             if task.state == utility.BulkInsertState.ImportFailed:
-                logger.dubug("Failed reason:", task.failed_reason)
+                logger.debug("Failed reason:", task.failed_reason)
                 raise Exception(task.failed_reason)
         self.collection.flush()
-        logger.dubug(self.get_entity_num)
-        logger.dubug("Done inserting data.")
+        logger.debug(self.get_entity_num)
+        logger.debug("Done inserting data.")
         self._create_index()
         utility.wait_for_index_building_complete(self._config.collection.name)
 
@@ -157,7 +157,7 @@ class MilvusClient:
         # 检查索引是否创建完成
         utility.wait_for_index_building_complete(
             self._config.collection.name, timeout=60)
-        logger.dubug(
+        logger.debug(
             "\nCreated index:\n{}".format(
                 self.collection.index().params))
 
@@ -165,11 +165,11 @@ class MilvusClient:
     # noinspection PyTypeChecker
     def search(self, search_vectors: list[np.ndarray]) -> list[list[dict]]:
         # search_vectors可以是多个向量
-        # logger.dubug(f"\nSearching ...")
+        # logger.debug(f"\nSearching ...")
         results = self.collection.search(
             data=search_vectors, **self._config.search.as_dict()
         )
-        # logger.dubug("collecting results ...")
+        # logger.debug("collecting results ...")
         ret_results = [[] for _ in range(len(results))]
         for i, hits in enumerate(results):
             for hit in hits:
@@ -180,7 +180,7 @@ class MilvusClient:
                         "name": hit.entity.get(embedding_field.name),
                     }
                 )
-        # plogger.dubug.plogger.dubug(f"Search results : {ret_results}")
+        # plogger.debug.plogger.debug(f"Search results : {ret_results}")
         return ret_results
 
     # 删除集合中的所有实体,并且关闭服务器
@@ -188,17 +188,17 @@ class MilvusClient:
     def shut_down(self):
         # 将仍未 持久化的数据持久化
 
-        logger.dubug(f"\nFlushing to seal the segment ...")
+        logger.debug(f"\nFlushing to seal the segment ...")
         self.collection.flush()
         # 释放内存
         self.collection.release()
-        logger.dubug(
+        logger.debug(
             f"\nReleased collection : {self._config.collection.name} successfully !")
         # self.collection.drop_index()
-        # logger.dubug(f"Drop index: {self._collection_name} successfully !")
+        # logger.debug(f"Drop index: {self._collection_name} successfully !")
         # self.collection.drop()
-        # logger.dubug(f"Drop collection: {self._collection_name} successfully !")
-        logger.dubug(f"Stop MilvusClient successfully !")
+        # logger.debug(f"Drop collection: {self._collection_name} successfully !")
+        logger.debug(f"Stop MilvusClient successfully !")
 
     def has_collection(self):
         return utility.has_collection(self._config.collection.name)

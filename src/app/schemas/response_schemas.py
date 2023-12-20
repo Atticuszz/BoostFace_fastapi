@@ -11,6 +11,16 @@ class IdentifyResult(BaseModel):
     time: str
     score: float
 
+    @classmethod
+    def from_matched_result(cls, matched_result):
+        return cls(
+            id=matched_result.id,
+            uid=matched_result.face_id,
+            name=matched_result.name,
+            time=matched_result.time,
+            score=matched_result.score
+        )
+
 
 class SystemStats(BaseModel):
     cpu_percent: float

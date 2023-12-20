@@ -11,7 +11,7 @@ from numpy.linalg import norm
 from pymilvus.orm import utility
 
 from boostface.types import MatchInfo, Image
-from src.boostface.component.common import Embedding, Image2Detect
+from app.services.inference.common import Embedding, Image2Detect
 from src.boostface.db.milvus_client import MilvusClient
 
 __all__ = ["Register", "Matcher"]

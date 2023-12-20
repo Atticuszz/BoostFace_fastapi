@@ -6,7 +6,7 @@ import cv2
 import numpy as np
 
 from .component.camera import CameraTask
-from .component.common import ClosableQueue, IdentifyManager
+from app.services.inference.common import ClosableQueue, IdentifyManager
 from .component.detector import DetectorTask
 from .component.identifier import IdentifierTask
 from .utils.decorator import thread_error_catcher

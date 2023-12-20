@@ -4,7 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import Event
 
 from src.boostface.app import boostface
-from src.boostface.component.common import IdentifyManager
+from app.services.inference.common import IdentifyManager
 from src.boostface.component.identifier import IdentifyWorker
 
 if __name__ == '__main__':

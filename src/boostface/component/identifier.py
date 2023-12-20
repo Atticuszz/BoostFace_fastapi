@@ -10,7 +10,7 @@ import numpy as np
 from line_profiler_pycharm import profile
 
 from boostface.types import Image, Bbox, Kps, Embedding, MatchInfo
-from .common import Face, Target, IdentifyManager, Image2Detect, FaceNew, Face2Search, ClosableQueue
+from app.services.inference.common import Face, Target, IdentifyManager, Image2Detect, FaceNew, Face2Search, ClosableQueue
 from .sort_plus import associate_detections_to_trackers
 from ..db.operations import Matcher
 from ..model_zoo import get_model, ArcFaceONNX

@@ -4,9 +4,9 @@ from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 
-from src.boostface.component.common import IdentifyManager, Face2Search
+from app.services.inference.common import IdentifyManager, Face2Search
 from src.boostface.component.identifier import IdentifyWorker
-from test import generate_face2search
+from tests import generate_face2search
 
 
 def thread_work(images: list[Face2Search], identifier_manager: IdentifyManager):

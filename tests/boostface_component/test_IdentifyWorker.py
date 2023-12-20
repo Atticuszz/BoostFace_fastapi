@@ -1,4 +1,3 @@
-# coding=utf-8
 import concurrent
 import multiprocessing
 from concurrent.futures import ThreadPoolExecutor
@@ -9,28 +8,21 @@ from line_profiler_pycharm import profile
 from matplotlib import pyplot as plt
 from scipy.stats import linregress
 
-from src.boostface.component.common import IdentifyManager, Image2Detect
-from src.boostface.component.identifier import IdentifyWorker, Identifier
-from test import generate_image2detect
+from app.services.inference.common import IdentifyManager, Face2Search
+from src.boostface.component.identifier import IdentifyWorker
+from tests import generate_face2search
 
 
 @profile
-def process_image(
-        images: list[Image2Detect],
-        identifier_manager: IdentifyManager):
-    """
-    thread of process_image
-    :param images:
-    :param identifier_manager:
-    :return:
-    """
+def process_image(images: list[Face2Search], identifier_manager: IdentifyManager):
     elapsed = []
     for image in images:
         start = default_timer()
-        identifier = Identifier(identifier_manager)
-        res = identifier.identified_results(image)
-        print("res:", res, "cost:", default_timer() - start)
+        uuid = identifier_manager.add_task(image)
+        result = identifier_manager.get_result(uuid)
+        print("task:", uuid, "result:", result, "cost:", default_timer() - start)
         elapsed.append(default_timer() - start)
+        # print("task:", uuid, "result:", result)
     return elapsed
 
 
@@ -39,53 +31,25 @@ def plot_mean_times_with_trend(mean_times):
     x_values = range(1, len(mean_times) + 1)
 
     # Compute the linear regression to get the slope and intercept
-    slope, intercept, r_value, p_value, std_err = linregress(
-        x_values, mean_times)
+    slope, intercept, r_value, p_value, std_err = linregress(x_values, mean_times)
 
     # Create a trendline using the slope and intercept
     trendline = [slope * i + intercept for i in x_values]
 
     # Plotting the original mean elapsed times with data points
     plt.figure(figsize=(10, 6))
-    plt.plot(
-        x_values,
-        mean_times,
-        marker='o',
-        label='Mean Elapsed Time',
-        linestyle='-',
-        color='blue')
+    plt.plot(x_values, mean_times, marker='o', label='Mean Elapsed Time', linestyle='-', color='blue')
 
     # Plotting the trend line
-    plt.plot(
-        x_values,
-        trendline,
-        label=f'Trendline (slope: {slope:.4f})',
-        linestyle='--',
-        color='red')
+    plt.plot(x_values, trendline, label=f'Trendline (slope: {slope:.4f})', linestyle='--', color='red')
 
     # Annotating the slope on the plot
-    plt.text(
-        0.6 *
-        max(x_values),
-        intercept +
-        slope *
-        0.6 *
-        max(x_values),
-        f'Slope: {slope:.4f}',
-        fontsize=12,
-        color='red')
+    plt.text(0.6 * max(x_values), intercept + slope * 0.6 * max(x_values), f'Slope: {slope:.4f}', fontsize=12,
+             color='red')
 
     # Highlighting the data points and showing (x, y) values
     for i, txt in enumerate(mean_times):
-        plt.annotate(
-            f'({i + 1}, {txt:.4f})',
-            (i + 1,
-             txt),
-            textcoords="offset points",
-            xytext=(
-                0,
-                10),
-            ha='center')
+        plt.annotate(f'({i + 1}, {txt:.4f})', (i + 1, txt), textcoords="offset points", xytext=(0, 10), ha='center')
 
     plt.xlabel('Number of Threads')
     plt.ylabel('Mean Elapsed Time (s)')
@@ -112,22 +76,14 @@ def test_IdentifyWorker():
             print("created sub process")
 
             # 创建虚拟数据
-            fake_img: list[Image2Detect] = [
-                generate_image2detect(
-                    size=(
-                        640, 640)) for _ in range(50)]
-            for num_threads in range(1, 2):  # from 1 to 20 threads
+            fake_img = [generate_face2search(size=(640, 640)) for _ in range(50)]
+            for num_threads in range(1, 6):  # from 1 to 20 threads
                 print(f"Testing {num_threads} threads")
                 # 使用线程池处理图像
                 elapsed_time = []
                 # 模拟5个线程同时喂给处理进程
                 with ThreadPoolExecutor(max_workers=num_threads) as executor:
-
-                    futures = [
-                        executor.submit(
-                            process_image,
-                            fake_img,
-                            identifier_manager) for _ in range(num_threads)]
+                    futures = [executor.submit(process_image, fake_img, identifier_manager) for _ in range(num_threads)]
                     for future in concurrent.futures.as_completed(futures):
                         elapsed = future.result()
                         elapsed_time.append(np.mean(elapsed))
