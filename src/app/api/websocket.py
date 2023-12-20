@@ -1,6 +1,7 @@
 # coding=utf-8
 import asyncio
 import datetime
+import uuid
 
 from fastapi import APIRouter, Depends, WebSocket
 from gotrue import Session
@@ -32,7 +33,7 @@ async def identify_ws(connection: WebSocketConnection, session: Session):
 
             time_now = datetime.datetime.now()
             result = IdentifyResult(
-                id=session.user.id,
+                id=str(uuid.uuid4()),
                 name=session.user.user_metadata.get("name"),
                 time=time_now.strftime("%Y-%m-%d %H:%M:%S"),
                 uid=search_data.uid,
