@@ -176,8 +176,8 @@ class MilvusClient:
                 ret_results[i].append(
                     {
                         "score": hit.score,
-                        "id": hit.entity.get(id_field.name),
-                        "name": hit.entity.get(embedding_field.name),
+                        "id": hit.entity.get('id'),
+                        "name": hit.entity.get('name'),
                     }
                 )
         # plogger.debug.plogger.debug(f"Search results : {ret_results}")

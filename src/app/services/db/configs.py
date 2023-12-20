@@ -163,7 +163,7 @@ basic_config = ClientConfig(
         ),
         anns_field="embedding",
         limit=1,
-        output_fields=["id", "embedding"]
+        output_fields=["id", 'name']
     )
 )
 if __name__ == "__main__":

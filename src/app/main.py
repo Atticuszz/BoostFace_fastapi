@@ -29,6 +29,8 @@ def create_app() -> FastAPI:
 app = create_app()
 
 # TODO: start in docker
+
+
 def server_run(debug: bool = False, port: int = 5000):
     if not debug:
         # Run FastAPI with reload

@@ -1,4 +1,6 @@
 import collections
+import logging
+from logging.handlers import QueueHandler
 from multiprocessing import Process, Event, Queue
 from pathlib import Path
 
@@ -6,9 +8,8 @@ from boostface.types import Embedding
 from app.services.inference.common import Face, TaskType
 from .model_zoo import ArcFaceONNX
 from .model_zoo import get_model
-from ..db.base_model import MatchedResult
 from ..db.operations import Matcher, Registrar
-from ...core.config import logger
+from ...core.config.logging_config import log_format
 
 matched_and_in_screen_deque = collections.deque(maxlen=1)
 
@@ -43,24 +44,29 @@ class IdentifyWorker(Process):
             self,
             task_queue: Queue,
             result_queue: Queue,
-            registered_queue: Queue):
+            registered_queue: Queue,
+            sub_process_msg_queue: Queue):
         super().__init__(daemon=True)
+        self._registrar = None
+        self._matcher = None
+        self._extractor = None
         self.registered_queue = registered_queue
         self._is_running = Event()
-        self._task_queue: Queue[tuple[TaskType, Face]] = task_queue
-        self._result_queue: Queue[MatchedResult] = result_queue
-        self._extractor = Extractor()
-        self._matcher = Matcher()
-        self._registrar = Registrar()
+        self._task_queue = task_queue  # Queue[tuple[TaskType, Face]]
+        self._result_queue = result_queue  # Queue[MatchedResult]
+        self._msg_queue = sub_process_msg_queue
 
     def start(self) -> None:
         self._is_running.set()
         super().start()
-        logger.debug("IdentifyWorker start")
 
     def run(self):
         """long time works in a single process"""
-        logger.debug("IdentifyWorker running")
+        self._configure_logging()
+        self._extractor = Extractor()
+        self._matcher = Matcher()
+        self._registrar = Registrar()
+        logging.debug("IdentifyWorker running")
         while self._is_running.is_set():
             task_type, face = self._task_queue.get()
             if task_type == TaskType.IDENTIFY:
@@ -74,7 +80,7 @@ class IdentifyWorker(Process):
         self._is_running.clear()
         self._matcher.stop_client()
         super().join()
-        logger.debug("IdentifyWorker stop")
+        logging.debug("IdentifyWorker stop")
 
     def _identify(self, face: Face):
         normed_embedding = self._extractor.run_onnx(face)
@@ -90,3 +96,10 @@ class IdentifyWorker(Process):
             face.sign_up_info.id,
             face.sign_up_info.name)
         self._result_queue.put(face.face_id)
+
+    def _configure_logging(self):
+        queue_handler = QueueHandler(self._msg_queue)
+        queue_handler.setFormatter(log_format)
+        logger = logging.getLogger()
+        logger.setLevel(logging.DEBUG)
+        logger.addHandler(queue_handler)
