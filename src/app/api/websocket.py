@@ -22,7 +22,7 @@ from ..utils.system_stats import cloud_system_stats
 identify_router = APIRouter(prefix="/identify", tags=["identify"])
 
 
-# TODO: add face identify
+
 @identify_router.websocket("/identify/ws/{client_id}")
 @websocket_endpoint(category="identify")
 async def identify_ws(connection: WebSocketConnection, session: Session):
@@ -32,9 +32,11 @@ async def identify_ws(connection: WebSocketConnection, session: Session):
             rec_data = await connection.receive_data(Face2SearchSchema)
             search_data = Face2Search.from_schema(rec_data)
             logger.debug(f"get the search data:{search_data}")
-            task_queue.put((TaskType.IDENTIFY, search_data.to_face()))
+
+            await task_queue.put_async((TaskType.IDENTIFY, search_data.to_face()))
+
             try:
-                res:MatchedResult = result_queue.get_nowait()
+                res: MatchedResult = await result_queue.get_async()
                 result = IdentifyResult.from_matched_result(res)
                 await connection.send_data(result)
             except Empty:

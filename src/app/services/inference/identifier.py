@@ -9,7 +9,6 @@ from app.services.inference.common import Face, TaskType
 from .model_zoo import ArcFaceONNX
 from .model_zoo import get_model
 from ..db.operations import Matcher, Registrar
-from ...core.config.logging_config import log_format
 
 matched_and_in_screen_deque = collections.deque(maxlen=1)
 
@@ -32,6 +31,7 @@ class Extractor:
         :return: face embedding
         """
         self.rec_model.get(face.img, face)
+        logging.debug(f"extractor extracted {face.face_id} embedding")
         return face.normed_embedding
 
 
@@ -78,7 +78,8 @@ class IdentifyWorker(Process):
 
     def stop(self):
         self._is_running.clear()
-        self._matcher.stop_client()
+        if self._matcher:
+            self._matcher.stop_client()
         super().join()
         logging.debug("IdentifyWorker stop")
 
@@ -93,13 +94,13 @@ class IdentifyWorker(Process):
         normed_embedding = self._extractor.run_onnx(face)
         self._registrar.sign_up(
             normed_embedding,
-            face.sign_up_info.id,
-            face.sign_up_info.name)
-        self._result_queue.put(face.face_id)
+            face.sign_up_id,
+            face.sign_up_name)
+        # self._result_queue.put(face.face_id)
 
     def _configure_logging(self):
         queue_handler = QueueHandler(self._msg_queue)
-        queue_handler.setFormatter(log_format)
+        # queue_handler.setFormatter(log_format)
         logger = logging.getLogger()
         logger.setLevel(logging.DEBUG)
         logger.addHandler(queue_handler)

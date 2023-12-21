@@ -20,7 +20,7 @@ class MilvusClient:
 
     def __init__(
             self,
-            flush_threshold: int = 1000,
+            flush_threshold: int = 100,
             refresh: bool = False,
             config: ClientConfig | None = None,
     ):

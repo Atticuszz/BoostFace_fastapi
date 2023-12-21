@@ -14,6 +14,7 @@ Bbox = NDArray[np.float64]  # shape: (4, 2)
 Embedding = NDArray[np.float64]  # shape: (512, )
 Image = NDArray[np.uint8]  # shape: (height, width, 3)
 
+
 @dataclass
 class SignUpInfo:
 
@@ -27,9 +28,11 @@ class Face:
     img: Image
     face_id: uuid
     kps: Kps
+    sign_up_id: str = ''
+    sign_up_name: str = ''
     det_score: float = 0.0
     embedding: Embedding | None = None
-    sign_up_info:SignUpInfo|None = None
+
     @property
     def normed_embedding(self) -> Embedding:
         return self.embedding / l2norm(self.embedding)
@@ -46,5 +49,3 @@ class TaskItem:
     face: Face
     # bool for register, MatchedResult for identify
     result: MatchedResult | bool | None = None
-
-

@@ -1,4 +1,8 @@
 # coding=utf-8
+import logging
+from asyncio import sleep
+from queue import Full
+
 from fastapi import APIRouter, HTTPException
 from gotrue import Session, AuthResponse
 from gotrue.errors import AuthApiError
@@ -40,11 +44,12 @@ async def refresh_token(refresh_token: str) -> Session:
 # TODO: add face passport register
 
 
-
-
-
-@auth_router.post("/face-register")
-async def face_register(face: Face2SearchSchema)->str:
+@auth_router.post("/face-register/{id}/{name}")
+async def face_register(id: str, name: str, face: Face2SearchSchema) -> str:
     to_register = Face2Search.from_schema(face).to_face()
-    task_queue.put((TaskType.REGISTER, to_register))
-    return registered_queue.get()
+    to_register.sign_up_id = id[:10]
+    to_register.sign_up_name = name[:10]
+
+    await task_queue.put_async((TaskType.REGISTER, to_register))
+
+    return "signed up!"

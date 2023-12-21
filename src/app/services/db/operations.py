@@ -1,5 +1,6 @@
 # coding=utf-8
 import dataclasses
+import logging
 import traceback
 import warnings
 from datetime import datetime
@@ -48,6 +49,7 @@ class Matcher:
             # TODO: set threshold?
             # if result['score'] > self._threshold:
             time_now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            logging.debug(f"matched {result['id']} with score {result['score']}")
             return MatchedResult(id=str(result['id']),
                                  name=result['name'],
                                  score=result['score'],
@@ -66,6 +68,7 @@ class Registrar:
     def sign_up(self, embedding: Embedding, id: str, name: str):
 
         assert np.isclose(norm(embedding), 1), "embedding must be normed"
+        logging.debug(f"registering {id} {name}")
         self._client.insert(
             [np.array([id]), np.array([name]), np.array([embedding])])
 

@@ -1,6 +1,7 @@
 # coding=utf-8
 import base64
 from dataclasses import dataclass
+from typing import Any
 
 import cv2
 import numpy as np
@@ -40,7 +41,11 @@ class Face2Search:
         """init from request schema"""
         # 将 base64 编码的图像转换为 Image 类型 (NumPy ndarray)
         image_data = base64.b64decode(schema.face_img)
-        image = cv2.imdecode(np.frombuffer(image_data, dtype=np.uint8), cv2.IMREAD_COLOR)
+        image = cv2.imdecode(
+            np.frombuffer(
+                image_data,
+                dtype=np.uint8),
+            cv2.IMREAD_COLOR)
         if image is None:
             raise ValueError("Failed to decode image")
 
@@ -63,4 +68,5 @@ class Face2Search:
             face_id=self.uid,
             kps=self.kps,
             det_score=self.det_score,
-            embedding=None)
+            embedding=None,
+        )
