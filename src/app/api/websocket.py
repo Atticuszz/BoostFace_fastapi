@@ -30,6 +30,7 @@ async def identify_ws(connection: WebSocketConnection, session: Session):
         # test identifyResult
         try:
             rec_data = await connection.receive_data(Face2SearchSchema)
+            logger.debug('rec_data:',rec_data)
             search_data = Face2Search.from_schema(rec_data)
             logger.debug(f"get the search data:{search_data}")
 
@@ -53,8 +54,8 @@ async def identify_ws(connection: WebSocketConnection, session: Session):
 
             # await asyncio.sleep(1)  # 示例延时
         except (ConnectionClosedOK, ConnectionClosedError, RuntimeError, WebSocketDisconnect) as e:
-            logger.info(
-                f"occurred error {e} Client #{session.user.id} left the chat")
+            logger.info(f"WebSocket error occurred: {e.__class__.__name__} - {e}")
+            logger.info(f"Client #{session.user.id} left the chat")
             break
 
 
