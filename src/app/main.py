@@ -36,10 +36,10 @@ def server_run(debug: bool = False, port: int = 5000):
         # Run FastAPI with reload
 
         subprocess.Popen(["uvicorn", "app:app", "--host",
-                          "127.0.0.1", "--port", str(port), "--reload"])
+                          "0.0.0.0", "--port", str(port), "--reload"])
     else:
 
-        uvicorn.run(app, port=port)
+        uvicorn.run(app, host='0.0.0.0', port=port)
 
 
 if __name__ == "__main__":

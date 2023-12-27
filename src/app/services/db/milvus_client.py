@@ -85,6 +85,7 @@ class MilvusClient:
         self.collection.insert(entities)
 
         logger.debug(f"Done inserting new {len(entities[0])}data.")
+        # TODO: schedule flush
         if not self.collection.has_index():  # 如果没有index，手动创建
             # Call the flush API to make inserted data immediately available
             # for search

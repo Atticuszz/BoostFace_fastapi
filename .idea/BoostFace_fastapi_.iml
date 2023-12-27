@@ -9,5 +9,6 @@
     <orderEntry type="module" module-name="work_space_fastapi" />
     <orderEntry type="module" module-name="BoostFace_pyqt6" />
     <orderEntry type="module" module-name="BoostFace-Atticus-Zhou" />
+    <orderEntry type="module" module-name="BoostFace_fastapi" />
   </component>
 </module>
