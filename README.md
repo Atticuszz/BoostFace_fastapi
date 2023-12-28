@@ -1,11 +1,11 @@
 # BoostFace_fastapi
 
-## Introduction
+## Introduction📃
 
 - cloud compute for extract and search face embedding
 - db backend for desktop and mobile app
 
-## deployment
+## deployment ☁️
 
 - docker compose
   - fastapi cloud compute
@@ -15,34 +15,31 @@
   - digital ocean
     - vps
 
-## architecture
+## architecture🌈
 
 - fastapi container
   - main process
-    - identify-worker sub process
-      - extract
-        - arcface onnx
-      - register or search
-        - milvus
-    - fastapi thread
-      - basic request
-      - get face_image from front-end and add to worker queue be shared with identify-worker
+    - fastapi
+      - basic apis
+    - IdentifyWorker sub process
+      - identify-worker sub process
+        - extract
+          - arcface onnx
+        - register or search
+          - milvus
 - milvus container
   - milvus-standalone
     - milvus
     - minio
     - milvus-etcd
 
-## Project Process🌈
+## Road map🚀
+1. for demo ✅ 
+2. for paper 🥵
+   -
+3. for real world 🥵
+   
 
-1. locally test fastapi cloud compute docker compose
-    1. login router ✅
-    2. socket
-        1. access record ✅
-        2. face image -> next step🥵
-        3. logging to remote ✅
-        4. system monitor ✅
-    3. boostface reconstruction for cloud env
 
 
 

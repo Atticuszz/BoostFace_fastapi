@@ -3,7 +3,7 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/../BoostFace/.idea/BoostFace-Atticus-Zhou.iml" filepath="$PROJECT_DIR$/../BoostFace/.idea/BoostFace-Atticus-Zhou.iml" />
-      <module fileurl="file://$PROJECT_DIR$/.idea/BoostFace_fastapi_.iml" filepath="$PROJECT_DIR$/.idea/BoostFace_fastapi_.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/BoostFace_fastapi.iml" filepath="$PROJECT_DIR$/.idea/BoostFace_fastapi.iml" />
       <module fileurl="file://$PROJECT_DIR$/../BoostFace_pyqt6/.idea/BoostFace_pyqt6.iml" filepath="$PROJECT_DIR$/../BoostFace_pyqt6/.idea/BoostFace_pyqt6.iml" />
       <module fileurl="file://$PROJECT_DIR$/../work_space_fastapi/.idea/work_space_fastapi.iml" filepath="$PROJECT_DIR$/../work_space_fastapi/.idea/work_space_fastapi.iml" />
     </modules>
